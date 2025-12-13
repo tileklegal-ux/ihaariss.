@@ -279,7 +279,7 @@ async def ta_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =============================
-# РОУТЕР
+# РОУТЕР FSM (ВСЕГДА ПОСЛЕДНИЙ)
 # =============================
 
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -333,10 +333,10 @@ def register_handlers_user(app):
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_PM}$"), pm_start))
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_GROWTH}$"), growth_start))
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_ANALYSIS}$"), ta_start))
-    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_BACK}$"), on_back))
-
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
-
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_NICHE}$"), ns_start))
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_PROFILE}$"), on_profile))
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_PREMIUM}$"), on_premium))
+    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_BACK}$"), on_back))
+
+    # FSM router — СТРОГО ПОСЛЕДНИЙ
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
