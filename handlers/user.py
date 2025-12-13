@@ -18,6 +18,16 @@ BTN_NICHE = "🔎 Подбор ниши"
 BTN_PROFILE = "👤 Личный кабинет"
 BTN_PREMIUM = "❤️ Премиум"
 
+# Рост и продажи — каналы
+BTN_INST = "Instagram"
+BTN_TG = "Telegram"
+BTN_MP = "Маркетплейс"
+BTN_KASPI = "Kaspi"
+BTN_WB = "Wildberries"
+BTN_OZON = "Ozon"
+BTN_OFFLINE = "Офлайн"
+BTN_OTHER = "Другое"
+
 # =============================
 # КЛАВИАТУРЫ
 # =============================
@@ -40,6 +50,19 @@ def business_hub_keyboard():
         [
             [KeyboardButton(BTN_PM)],
             [KeyboardButton(BTN_GROWTH)],
+            [KeyboardButton(BTN_BACK)],
+        ],
+        resize_keyboard=True,
+    )
+
+
+def growth_channels_keyboard():
+    return ReplyKeyboardMarkup(
+        [
+            [KeyboardButton(BTN_INST), KeyboardButton(BTN_TG)],
+            [KeyboardButton(BTN_MP), KeyboardButton(BTN_KASPI)],
+            [KeyboardButton(BTN_WB), KeyboardButton(BTN_OZON)],
+            [KeyboardButton(BTN_OFFLINE), KeyboardButton(BTN_OTHER)],
             [KeyboardButton(BTN_BACK)],
         ],
         resize_keyboard=True,
@@ -111,7 +134,7 @@ async def on_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =============================
-# FSM 💰 ПРИБЫЛЬ И ДЕНЬГИ (РАБОЧИЙ)
+# FSM 💰 ПРИБЫЛЬ И ДЕНЬГИ
 # =============================
 
 async def pm_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -160,7 +183,7 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 # =============================
-# FSM 🚀 РОСТ И ПРОДАЖИ (РАБОЧИЙ, ТЕКСТ)
+# FSM 🚀 РОСТ И ПРОДАЖИ
 # =============================
 
 async def growth_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -168,22 +191,19 @@ async def growth_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["gs_state"] = "channel"
 
     await update.message.reply_text(
-        "🚀 Рост и продажи\n\n"
-        "Где основной канал продаж?",
-        reply_markup=ReplyKeyboardMarkup(
-            [[KeyboardButton(BTN_BACK)]],
-            resize_keyboard=True,
-        ),
+        "🚀 Рост и продажи\n\nГде основной канал продаж?",
+        reply_markup=growth_channels_keyboard(),
     )
 
 
 async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("gs_state") == "channel":
-        context.user_data["channel"] = update.message.text
+        channel = update.message.text
         context.user_data.clear()
 
         await update.message.reply_text(
             "📈 План роста:\n\n"
+            f"Канал: {channel}\n\n"
             "1️⃣ Усиль поток клиентов\n"
             "2️⃣ Проверь оффер\n"
             "3️⃣ Убери узкие места\n\n"
@@ -192,23 +212,16 @@ async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 # =============================
-# 📊 АНАЛИТИКА ТОВАРА — ЗАГЛУШКА
+# ЗАГЛУШКИ
 # =============================
 
 async def ta_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
-
     await update.message.reply_text(
-        "📊 Аналитика товара\n\n"
-        "Этот раздел сейчас в разработке.\n"
-        "Скоро здесь можно будет проверить товар "
-        "и понять, стоит ли его тестировать.",
+        "📊 Аналитика товара\n\nРаздел в разработке.",
         reply_markup=main_menu_keyboard(),
     )
 
-# =============================
-# 🔎 ПОДБОР НИШИ — ЗАГЛУШКА
-# =============================
 
 async def ns_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -216,9 +229,6 @@ async def ns_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu_keyboard(),
     )
 
-# =============================
-# 👤 ЛИЧНЫЙ КАБИНЕТ — ЗАГЛУШКА
-# =============================
 
 async def on_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -226,9 +236,6 @@ async def on_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu_keyboard(),
     )
 
-# =============================
-# ❤️ PREMIUM — ЗАГЛУШКА
-# =============================
 
 async def on_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
