@@ -26,6 +26,16 @@ BTN_NICHE = "🔎 Подбор ниши"
 BTN_PROFILE = "👤 Личный кабинет"
 BTN_PREMIUM = "❤️ Премиум"
 
+# Категории товара
+BTN_CAT_CLOTHES = "👗 Одежда / обувь"
+BTN_CAT_ELECTRONICS = "📱 Электроника"
+BTN_CAT_HOME = "🏠 Товары для дома"
+BTN_CAT_KIDS = "🧸 Детские товары"
+BTN_CAT_AUTO = "🚗 Авто / аксессуары"
+BTN_CAT_FOOD = "🍔 Еда / напитки"
+BTN_CAT_BEAUTY = "🧴 Красота / уход"
+BTN_CAT_OTHER = "📦 Другое"
+
 
 # =============================
 # КЛАВИАТУРЫ
@@ -49,6 +59,19 @@ def business_hub_keyboard():
         [
             [KeyboardButton(BTN_PM)],
             [KeyboardButton(BTN_GROWTH)],
+            [KeyboardButton(BTN_BACK)],
+        ],
+        resize_keyboard=True,
+    )
+
+
+def product_category_keyboard():
+    return ReplyKeyboardMarkup(
+        [
+            [KeyboardButton(BTN_CAT_CLOTHES), KeyboardButton(BTN_CAT_ELECTRONICS)],
+            [KeyboardButton(BTN_CAT_HOME), KeyboardButton(BTN_CAT_KIDS)],
+            [KeyboardButton(BTN_CAT_AUTO), KeyboardButton(BTN_CAT_FOOD)],
+            [KeyboardButton(BTN_CAT_BEAUTY), KeyboardButton(BTN_CAT_OTHER)],
             [KeyboardButton(BTN_BACK)],
         ],
         resize_keyboard=True,
@@ -113,104 +136,6 @@ async def on_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =============================
-# FSM 💰 ПРИБЫЛЬ И ДЕНЬГИ
-# =============================
-
-async def pm_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.clear()
-    context.user_data["pm_state"] = "revenue"
-
-    await update.message.reply_text(
-        "💰 Прибыль и деньги\n\n"
-        "Введи выручку в месяц:",
-        reply_markup=ReplyKeyboardMarkup(
-            [[KeyboardButton(BTN_BACK)]],
-            resize_keyboard=True,
-        ),
-    )
-
-
-async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    state = context.user_data.get("pm_state")
-    text = update.message.text.replace(" ", "")
-
-    if state == "revenue":
-        if not text.isdigit():
-            await update.message.reply_text("Введи число.")
-            return
-
-        context.user_data["revenue"] = int(text)
-        context.user_data["pm_state"] = "expenses"
-        await update.message.reply_text("Теперь введи расходы:")
-        return
-
-    if state == "expenses":
-        if not text.isdigit():
-            await update.message.reply_text("Введи число.")
-            return
-
-        revenue = context.user_data["revenue"]
-        expenses = int(text)
-
-        profit = revenue - expenses
-        margin = (profit / revenue * 100) if revenue else 0
-
-        context.user_data.clear()
-
-        await update.message.reply_text(
-            f"📊 Результат:\n\n"
-            f"Выручка: {revenue}\n"
-            f"Расходы: {expenses}\n"
-            f"Прибыль: {profit}\n"
-            f"Маржа: {margin:.1f}%",
-            reply_markup=business_hub_keyboard(),
-        )
-
-
-# =============================
-# FSM 🚀 РОСТ И ПРОДАЖИ
-# =============================
-
-async def growth_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.clear()
-    context.user_data["gs_state"] = "channel"
-
-    await update.message.reply_text(
-        "🚀 Рост и продажи\n\n"
-        "Где основной канал продаж?\n"
-        "(онлайн / офлайн / маркетплейс)",
-        reply_markup=ReplyKeyboardMarkup(
-            [[KeyboardButton(BTN_BACK)]],
-            resize_keyboard=True,
-        ),
-    )
-
-
-async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    state = context.user_data.get("gs_state")
-
-    if state == "channel":
-        context.user_data["channel"] = update.message.text
-        context.user_data["gs_state"] = "problem"
-        await update.message.reply_text(
-            "Какая главная проблема роста?\n"
-            "(мало клиентов / низкий чек / конверсия)"
-        )
-        return
-
-    if state == "problem":
-        context.user_data.clear()
-        await update.message.reply_text(
-            "📈 План роста:\n\n"
-            "1️⃣ Усиль поток клиентов\n"
-            "2️⃣ Проверь оффер\n"
-            "3️⃣ Убери узкие места\n\n"
-            "Работай по одному шагу.",
-            reply_markup=business_hub_keyboard(),
-        )
-
-
-# =============================
 # FSM 📊 АНАЛИТИКА ТОВАРА
 # =============================
 
@@ -220,11 +145,9 @@ async def ta_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         "📊 Аналитика товара\n\n"
-        "Введи категорию товара:",
-        reply_markup=ReplyKeyboardMarkup(
-            [[KeyboardButton(BTN_BACK)]],
-            resize_keyboard=True,
-        ),
+        "Я помогу оценить потенциал товара до запуска или масштабирования.\n\n"
+        "👉 Выбери, что ты хочешь продавать:",
+        reply_markup=product_category_keyboard(),
     )
 
 
@@ -279,7 +202,50 @@ async def ta_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =============================
-# РОУТЕР FSM (ВСЕГДА ПОСЛЕДНИЙ)
+# FSM 🚀 РОСТ И ПРОДАЖИ
+# =============================
+
+async def growth_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+    context.user_data["gs_state"] = "channel"
+
+    await update.message.reply_text(
+        "🚀 Рост и продажи\n\n"
+        "Где основной канал продаж?\n"
+        "(онлайн / офлайн / маркетплейс)",
+        reply_markup=ReplyKeyboardMarkup(
+            [[KeyboardButton(BTN_BACK)]],
+            resize_keyboard=True,
+        ),
+    )
+
+
+async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    state = context.user_data.get("gs_state")
+
+    if state == "channel":
+        context.user_data["channel"] = update.message.text
+        context.user_data["gs_state"] = "problem"
+        await update.message.reply_text(
+            "Какая главная проблема роста?\n"
+            "(мало клиентов / низкий чек / конверсия)"
+        )
+        return
+
+    if state == "problem":
+        context.user_data.clear()
+        await update.message.reply_text(
+            "📈 План роста:\n\n"
+            "1️⃣ Усиль поток клиентов\n"
+            "2️⃣ Проверь оффер\n"
+            "3️⃣ Убери узкие места\n\n"
+            "Работай по одному шагу.",
+            reply_markup=business_hub_keyboard(),
+        )
+
+
+# =============================
+# FSM ROUTER (ПОСЛЕДНИЙ)
 # =============================
 
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -338,5 +304,4 @@ def register_handlers_user(app):
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_PREMIUM}$"), on_premium))
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_BACK}$"), on_back))
 
-    # FSM router — СТРОГО ПОСЛЕДНИЙ
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
