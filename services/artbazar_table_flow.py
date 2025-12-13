@@ -1,125 +1,111 @@
-from telegram import Update
-from telegram.ext import ContextTypes
+from __future__ import annotations
 
-# Полный список полей, заполняемых пользователем
-FIELDS = [
-    ("niche", "Введите нишу товара:"),
-    ("product", "Введите название товара:"),
-    ("purchase_price", "Введите закупочную цену:"),
-    ("sale_price", "Введите цену продажи:"),
-    ("commission_percent", "Введите комиссию площадки (%):"),
-    ("logistics_cost", "Введите расходы на логистику:"),
-    ("delivery_cost", "Введите расходы на доставку:"),
-    ("marketing_cost", "Введите маркетинг:"),
-    ("other_costs", "Введите прочие расходы:"),
-    ("risks", "Опишите риски:"),
-    ("competition", "Уровень конкуренции:"),
-    ("seasonality", "Определите сезонность:")
+from typing import Any, Dict, Optional
+
+from telegram import Update, ReplyKeyboardRemove
+from telegram.ext import ConversationHandler, ContextTypes
+
+# Одно состояние для многошагового диалога
+ARTBAZAR_TABLE_STATE = 100
+
+# Последовательность вопросов
+FIELDS_FLOW = [
+    {"key": "niche", "label": "Ниша", "question": "📌 Шаг 1/12\nНапишите нишу:", "type": "text"},
+    {"key": "product", "label": "Товар", "question": "📌 Шаг 2/12\nНапишите товар:", "type": "text"},
+    {"key": "purchase_price", "label": "Закупочная цена", "question": "💰 Шаг 3/12\nЗакупочная цена за единицу:", "type": "number"},
+    {"key": "sale_price", "label": "Цена продажи", "question": "💰 Шаг 4/12\nЦена продажи за единицу:", "type": "number"},
+    {"key": "commission_percent", "label": "Комиссия (%)", "question": "💼 Шаг 5/12\nКомиссия площадки (%):", "type": "number"},
+    {"key": "logistics", "label": "Логистика", "question": "🚚 Шаг 6/12\nЛогистика на единицу товара:", "type": "number"},
+    {"key": "delivery", "label": "Доставка", "question": "📦 Шаг 7/12\nДоставка до клиента:", "type": "number"},
+    {"key": "marketing", "label": "Маркетинг", "question": "📣 Шаг 8/12\nРасходы на маркетинг:", "type": "number"},
+    {"key": "other_expenses", "label": "Прочие расходы", "question": "📎 Шаг 9/12\nПрочие расходы:", "type": "number"},
+    {"key": "competition", "label": "Конкуренция", "question": "⚔ Шаг 10/12\nОпишите конкуренцию:", "type": "text"},
+    {"key": "seasonality", "label": "Сезонность", "question": "📆 Шаг 11/12\nЕсть ли сезонность?", "type": "text"},
+    {"key": "risks", "label": "Риски", "question": "⚠ Шаг 12/12\nОпишите ключевые риски:", "type": "text"},
 ]
 
 
-async def ask_next(update, context, index):
-    """Запрашивает следующий вопрос"""
-    field_name, question = FIELDS[index]
-    context.user_data["current_field"] = field_name
-    await update.message.reply_text(question)
+def _parse_number(text: str) -> float:
+    t = text.replace(" ", "").replace(",", ".")
+    num = float(t)
+    if num < 0:
+        raise ValueError
+    return num
 
 
-async def process_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обрабатывает входящие ответы пользователя"""
-
-    user_data = context.user_data
-    current_field = user_data.get("current_field")
-    answers = user_data.setdefault("answers", {})
-    index = user_data.get("field_index", 0)
-
-    # сохраняем ответ
-    if current_field:
-        answers[current_field] = update.message.text
-
-    # идём к следующему шагу
-    index += 1
-
-    # если всё заполнено → возвращаем данные
-    if index >= len(FIELDS):
-        context.user_data.clear()
-        return answers, True
-
-    # продолжаем задавать вопросы
-    user_data["field_index"] = index
-    await ask_next(update, context, index)
-    return answers, False
-
-
+# ---------------------------------------------------------
+# СТАРТ ДИАЛОГА
+# ---------------------------------------------------------
 async def start_table_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Главная функция диалога.
-    Возвращает:
-    - table_data: dict
-    - metrics: dict
-    - summary: текстовое описание
-    """
+    context.user_data["artbazar_table_data"] = {}
+    context.user_data["artbazar_table_step"] = 0
 
-    # Начинаем с первого вопроса
-    context.user_data["field_index"] = 0
-    context.user_data["answers"] = {}
+    await update.message.reply_text(FIELDS_FLOW[0]["question"], reply_markup=ReplyKeyboardRemove())
+    return ARTBAZAR_TABLE_STATE
 
-    first_field, first_question = FIELDS[0]
-    context.user_data["current_field"] = first_field
 
-    await update.message.reply_text(first_question)
+# ---------------------------------------------------------
+# ОСНОВНОЙ ОБРАБОТЧИК
+# ---------------------------------------------------------
+async def handle_table_flow_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
 
-    # Основной цикл ожидания реакции
-    while True:
-        response = await context.application.wait_for_update()
-        if response.message:
-            answers, finished = await process_message(response.message, context)
-            if finished:
-                break
+    table = context.user_data.get("artbazar_table_data", {})
+    step = context.user_data.get("artbazar_table_step", 0)
 
-    # Преобразуем ответы
-    table = {
-        "Ниша": answers.get("niche"),
-        "Товар": answers.get("product"),
-        "Закупочная цена": float(answers.get("purchase_price", 0)),
-        "Цена продажи": float(answers.get("sale_price", 0)),
-        "Комиссия (%)": float(answers.get("commission_percent", 0)),
-        "Логистика": float(answers.get("logistics_cost", 0)),
-        "Доставка": float(answers.get("delivery_cost", 0)),
-        "Маркетинг": float(answers.get("marketing_cost", 0)),
-        "Прочие расходы": float(answers.get("other_costs", 0)),
-        "Риски": answers.get("risks"),
-        "Конкуренция": answers.get("competition"),
-        "Сезонность": answers.get("seasonality"),
+    # Подстраховка
+    if step >= len(FIELDS_FLOW):
+        return ConversationHandler.END
+
+    field = FIELDS_FLOW[step]
+    key = field["key"]
+
+    # Валидация
+    if field["type"] == "number":
+        try:
+            value = _parse_number(text)
+        except Exception:
+            await update.message.reply_text("Введите число корректно (например: 1200 или 12.5).")
+            return ARTBAZAR_TABLE_STATE
+        table[key] = value
+    else:
+        if not text:
+            await update.message.reply_text("Ответ не может быть пустым.")
+            return ARTBAZAR_TABLE_STATE
+        table[key] = text
+
+    # Сохранить
+    context.user_data["artbazar_table_data"] = table
+    step += 1
+    context.user_data["artbazar_table_step"] = step
+
+    # Следующий вопрос
+    if step < len(FIELDS_FLOW):
+        await update.message.reply_text(FIELDS_FLOW[step]["question"])
+        return ARTBAZAR_TABLE_STATE
+
+    # Таблица завершена
+    context.user_data["artbazar_table_result"] = {
+        "table_data": table
     }
 
-    # Генерируем базовые метрики
-    commission_value = table["Цена продажи"] * (table["Комиссия (%)"] / 100)
-    gross_profit = table["Цена продажи"] - table["Закупочная цена"]
-    net_profit = gross_profit - (
-        commission_value
-        + table["Логистика"]
-        + table["Доставка"]
-        + table["Маркетинг"]
-        + table["Прочие расходы"]
-    )
+    return ConversationHandler.END
 
-    metrics = {
-        "commission_value": commission_value,
-        "gross_profit": gross_profit,
-        "net_profit": net_profit,
-        "margin_percent": round((net_profit / table["Цена продажи"]) * 100, 2) if table["Цена продажи"] else 0,
-        "breakeven_units": 1 if net_profit > 0 else 9999,
-    }
 
-    summary = (
-        f"Ниша: {table['Ниша']}\n"
-        f"Товар: {table['Товар']}\n"
-        f"Закуп: {table['Закупочная цена']}\n"
-        f"Продажа: {table['Цена продажи']}\n"
-        f"Риски: {table['Риски']}\n"
-        f"Конкуренция: {table['Конкуренция']}\n"
-        f"Сезонность: {table['Сезонность']}\n"
-    )
+# ---------------------------------------------------------
+# CANCEL
+# ---------------------------------------------------------
+async def cancel_table_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop("artbazar_table_data", None)
+    context.user_data.pop("artbazar_table_step", None)
+    context.user_data.pop("artbazar_table_result", None)
 
-    return table, metrics, summary
+    await update.message.reply_text("Диалог таблицы остановлен.", reply_markup=ReplyKeyboardRemove())
+    return ConversationHandler.END
+
+
+# ---------------------------------------------------------
+# ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ
+# ---------------------------------------------------------
+def get_table_result_from_context(context: ContextTypes.DEFAULT_TYPE) -> Optional[dict]:
+    return context.user_data.get("artbazar_table_result")

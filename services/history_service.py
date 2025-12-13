@@ -1,85 +1,69 @@
 import json
+import logging
 from datetime import datetime
-from database.models import get_connection
+from database.db import get_db_connection
+
+logger = logging.getLogger(__name__)
 
 
-def save_history(user_id: int, table_data: dict, ai_result: dict):
-    """
-    Сохраняет анализ в базу, только для PREMIUM.
-    Хранит не больше 5 последних записей.
-    """
+# ========================================
+#  Сохранение анализа в историю
+# ========================================
+def save_analysis_history(user_id: int, input_data: dict, ai_result: str):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
 
-    conn = get_connection()
-    cursor = conn.cursor()
+        cur.execute("""
+            INSERT INTO analysis_history (user_id, input_data, ai_output, created_at)
+            VALUES (?, ?, ?, ?)
+        """, (
+            user_id,
+            json.dumps(input_data, ensure_ascii=False),
+            ai_result,
+            datetime.utcnow().isoformat()
+        ))
 
-    cursor.execute("""
-        INSERT INTO analysis_history (user_id, table_json, ai_json, created_at)
-        VALUES (?, ?, ?, ?)
-    """, (
-        user_id,
-        json.dumps(table_data, ensure_ascii=False),
-        json.dumps(ai_result, ensure_ascii=False),
-        datetime.utcnow().isoformat()
-    ))
+        conn.commit()
+        conn.close()
 
-    # Оставляем только 5 последних записей по пользователю
-    cursor.execute("""
-        DELETE FROM analysis_history
-        WHERE id NOT IN (
-            SELECT id FROM analysis_history
+    except Exception as e:
+        logger.error(f"Ошибка сохранения истории: {e}")
+
+
+# ========================================
+#  Получение истории
+# ========================================
+def get_user_history(user_id: int, limit: int = 5):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        cur.execute("""
+            SELECT input_data, ai_output, created_at
+            FROM analysis_history
             WHERE user_id = ?
             ORDER BY created_at DESC
-            LIMIT 5
-        )
-        AND user_id = ?
-    """, (user_id, user_id))
+            LIMIT ?
+        """, (user_id, limit))
 
-    conn.commit()
-    conn.close()
+        rows = cur.fetchall()
+        conn.close()
 
+        history = []
+        for row in rows:
+            input_data = json.loads(row["input_data"])
+            ai_output = row["ai_output"]
+            created_at = row["created_at"]
 
-def get_history(user_id: int):
-    """
-    Возвращает последние 5 анализов пользователя (от новых к старым).
-    """
+            history.append({
+                "input": input_data,
+                "output": ai_output,
+                "created_at": created_at
+            })
 
-    conn = get_connection()
-    cursor = conn.cursor()
+        return history
 
-    cursor.execute("""
-        SELECT table_json, ai_json, created_at
-        FROM analysis_history
-        WHERE user_id = ?
-        ORDER BY created_at DESC
-        LIMIT 5
-    """, (user_id,))
-
-    rows = cursor.fetchall()
-    conn.close()
-
-    result = []
-    for row in rows:
-        table_json = json.loads(row[0])
-        ai_json = json.loads(row[1])
-        created = row[2]
-
-        result.append({
-            "table": table_json,
-            "ai": ai_json,
-            "created_at": created
-        })
-
-    return result
-
-
-def get_last_analysis(user_id: int):
-    """
-    Возвращает последний (самый новый) анализ пользователя.
-    Формат: (table_dict, ai_dict) или None.
-    """
-    history = get_history(user_id)
-    if not history:
-        return None
-
-    last = history[0]
-    return last["table"], last["ai"]
+    except Exception as e:
+        logger.error(f"Ошибка получения истории: {e}")
+        return []

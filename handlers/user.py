@@ -1,155 +1,188 @@
-import os
+from telegram import (
+    Update,
+    ReplyKeyboardMarkup,
+    KeyboardButton,
+)
+from telegram.ext import (
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
-from telegram import Update
-from telegram.ext import ContextTypes, CommandHandler
+# =============================
+# КНОПКИ
+# =============================
 
-from config import OWNER_ID
-from services.artbazar_table_flow import start_table_flow
-from services.ai_analysis import analyze_artbazar_table
-from services.premium_logic import is_premium
-from services.history_service import save_history, get_last_analysis
-from services.export_pdf import generate_pdf
-from services.export_excel import generate_excel
+BTN_YES = "Да"
+BTN_NO = "Нет"
+
+BTN_BIZ = "📊 Бизнес-анализ"
+BTN_PM = "💰 Прибыль и деньги"
+BTN_GROWTH = "🚀 Рост и продажи"
+BTN_BACK = "⬅️ Назад"
+
+BTN_ANALYSIS = "📊 Аналитика товара"
+BTN_NICHE = "🔎 Подбор ниши"
+BTN_PROFILE = "👤 Личный кабинет"
+BTN_PREMIUM = "❤️ Премиум"
 
 
-# -------------------------------
-# Команда USER
-# -------------------------------
-async def user_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# =============================
+# КЛАВИАТУРЫ
+# =============================
+
+def get_main_menu_keyboard():
+    return ReplyKeyboardMarkup(
+        [
+            [KeyboardButton(BTN_BIZ)],
+            [KeyboardButton(BTN_ANALYSIS)],
+            [KeyboardButton(BTN_NICHE)],
+            [KeyboardButton(BTN_PROFILE)],
+            [KeyboardButton(BTN_PREMIUM)],
+        ],
+        resize_keyboard=True,
+    )
+
+
+def business_hub_keyboard():
+    return ReplyKeyboardMarkup(
+        [
+            [KeyboardButton(BTN_PM)],
+            [KeyboardButton(BTN_GROWTH)],
+            [KeyboardButton(BTN_BACK)],
+        ],
+        resize_keyboard=True,
+    )
+
+
+# =============================
+# START FLOW (после /start)
+# =============================
+
+async def cmd_start_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    name = user.first_name or user.username or "друг"
+
+    start_text = (
+        f"Привет, {name} 👋\n\n"
+        "Тебя приветствует *Artbazar AI* —\n"
+        "аналитический помощник для предпринимателей.\n\n"
+        "Я помогаю:\n"
+        "• анализировать товары\n"
+        "• оценивать ниши\n"
+        "• считать экономику идей\n"
+        "• принимать решения спокойнее и быстрее\n\n"
+        "⚠️ Важно\n"
+        "Любая аналитика — это поддержка мышления,\n"
+        "а не гарантия результата.\n"
+        "Рынок меняется, данные могут быть неполными,\n"
+        "финальные решения всегда остаются за тобой.\n\n"
+        "Продолжим?"
+    )
+
     await update.message.reply_text(
-        "Это пользовательский режим.\nИспользуйте /analysis чтобы начать анализ."
+        start_text,
+        parse_mode="Markdown",
+        reply_markup=ReplyKeyboardMarkup(
+            [[KeyboardButton(BTN_YES), KeyboardButton(BTN_NO)]],
+            resize_keyboard=True,
+        ),
     )
 
 
-# -------------------------------
-# Основная команда анализа
-# -------------------------------
-async def analysis_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    user_id = update.effective_user.id
-
-    # Владелец не имеет доступа к AI-анализу по ТЗ
-    if user_id == OWNER_ID:
-        await update.message.reply_text(
-            "Владельцу недоступен AI-анализ.\nИспользуйте отдельный пользовательский аккаунт."
-        )
-        return
-
-    premium = is_premium(user_id)
-
-    # 1) собираем таблицу
-    table_data, metrics, summary = await start_table_flow(update, context)
-
-    # 2) AI-анализ
-    ai_result = await analyze_artbazar_table(
-        table_data=table_data,
-        metrics=metrics,
-        raw_summary=summary,
-        is_premium=premium
+async def on_yes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "Отлично. Выбирай раздел 👇",
+        reply_markup=get_main_menu_keyboard(),
     )
 
-    # 3) сохраняем историю (только PREMIUM)
-    if premium:
-        save_history(user_id, table_data, ai_result)
 
-    # 4) Формирование ответа
-    if premium:
-        text = f"""
-🧠 *AI-анализ от Artbazar AI (PREMIUM)*
-
-📄 *Отчёт:*
-{ai_result['report']}
-
-📊 *Прогноз:*
-{ai_result['forecast']}
-
-⚠ *Риски:*
-{ai_result['risks']}
-
-🎯 *Решение:* {ai_result['decision']}
-"""
-    else:
-        text = f"""
-🧠 *AI-анализ (BASE)*
-
-📄 *Краткий отчёт:*
-{ai_result['report']}
-
-⚠ Для полного прогноза, рисков и инвестиционного решения — активируйте PREMIUM.
-"""
-
-    await update.message.reply_text(text, parse_mode="Markdown")
-
-    # 5) Кнопки экспорта только если премиум
-    if premium:
-        await update.message.reply_html(
-            "Хотите экспортировать анализ?\n"
-            "<b>/export_pdf</b> — PDF отчёт\n"
-            "<b>/export_excel</b> — Excel файл"
-        )
-    else:
-        await update.message.reply_html(
-            "Экспорт в PDF/Excel доступен только для <b>PREMIUM</b>."
-        )
+async def on_no(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "Хорошо. Если понадобится — я рядом.",
+        reply_markup=get_main_menu_keyboard(),
+    )
 
 
-# -------------------------------
-# Экспорт PDF
-# -------------------------------
-async def export_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
+# =============================
+# БИЗНЕС-АНАЛИЗ (HUB)
+# =============================
 
-    if not is_premium(user_id):
-        await update.message.reply_text("PDF доступен только Premium-пользователям.")
-        return
-
-    last = get_last_analysis(user_id)
-    if not last:
-        await update.message.reply_text("Нет сохранённых анализов.")
-        return
-
-    table, ai = last
-
-    file_path = f"/tmp/artbazar_{user_id}.pdf"
-    generate_pdf(file_path, table, ai)
-
-    await update.message.reply_document(open(file_path, "rb"))
-    os.remove(file_path)
+async def on_business_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "📊 Бизнес-анализ\n\nВыбери сценарий:",
+        reply_markup=business_hub_keyboard(),
+    )
 
 
-# -------------------------------
-# Экспорт Excel
-# -------------------------------
-async def export_excel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-
-    if not is_premium(user_id):
-        await update.message.reply_text("Excel доступен только Premium-пользователям.")
-        return
-
-    last = get_last_analysis(user_id)
-    if not last:
-        await update.message.reply_text("Нет сохранённых анализов.")
-        return
-
-    table, ai = last
-
-    file_path = f"/tmp/artbazar_{user_id}.xlsx"
-    generate_excel(file_path, table, ai)
-
-    await update.message.reply_document(open(file_path, "rb"))
-    os.remove(file_path)
+async def on_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+    await update.message.reply_text(
+        "Главное меню",
+        reply_markup=get_main_menu_keyboard(),
+    )
 
 
-# -------------------------------
-# Регистрация всех user-хендлеров
-# -------------------------------
-def register_user_handlers(app):
+# =============================
+# FSM ЗАГЛУШКИ
+# =============================
 
-    app.add_handler(CommandHandler("user", user_command))
-    app.add_handler(CommandHandler("analysis", analysis_start))
-    app.add_handler(CommandHandler("analyze", analysis_start))
+async def pm_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "💰 Прибыль и деньги\n\nFSM подключим следующим шагом.",
+        reply_markup=business_hub_keyboard(),
+    )
 
-    # Экспорт
-    app.add_handler(CommandHandler("export_pdf", export_pdf))
-    app.add_handler(CommandHandler("export_excel", export_excel))
+
+async def growth_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🚀 Рост и продажи\n\nFSM подключим следующим шагом.",
+        reply_markup=business_hub_keyboard(),
+    )
+
+
+async def ta_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "📊 Аналитика товара\n\nБудет подключена позже.",
+        reply_markup=get_main_menu_keyboard(),
+    )
+
+
+async def ns_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🔎 Подбор ниши\n\nБудет подключена позже.",
+        reply_markup=get_main_menu_keyboard(),
+    )
+
+
+async def on_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "👤 Личный кабинет",
+        reply_markup=get_main_menu_keyboard(),
+    )
+
+
+async def on_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "❤️ Premium\n\nПодключение позже.",
+        reply_markup=get_main_menu_keyboard(),
+    )
+
+
+# =============================
+# REGISTER
+# =============================
+
+def register_handlers_user(app):
+    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_YES}$"), on_yes))
+    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_NO}$"), on_no))
+
+    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_BIZ}$"), on_business_analysis))
+    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_PM}$"), pm_start))
+    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_GROWTH}$"), growth_start))
+    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_BACK}$"), on_back))
+
+    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_ANALYSIS}$"), ta_start))
+    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_NICHE}$"), ns_start))
+    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_PROFILE}$"), on_profile))
+    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_PREMIUM}$"), on_premium))

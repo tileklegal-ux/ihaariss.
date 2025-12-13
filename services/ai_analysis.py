@@ -1,137 +1,108 @@
-import os
-import json
-from typing import Dict, Any
-
+import logging
 from openai import OpenAI
+from database.db import is_user_premium
+from services.history_service import save_analysis_history
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+logger = logging.getLogger(__name__)
 
+client = OpenAI()
 
-# ---------------------------------------------------------
-#  PROMPT BUILDER
-# ---------------------------------------------------------
-
-def _build_prompt(table_data: Dict[str, Any], metrics: Dict[str, Any], raw_summary: str, is_premium: bool) -> str:
-    """
-    Генерация PROMPT для BASE и PREMIUM версий анализа.
-    """
-
-    base_info = {
-        "table": table_data,
-        "metrics": metrics,
-    }
-
-    if is_premium:
-        prompt_type = "PREMIUM"
-        instructions = """
-Ты — эксперт по юнит-экономике, маркетплейсам и малому бизнесу в Кыргызстане и Казахстане.
-
-Составь полный профессиональный анализ:
-- подробный отчёт
-- прогноз спроса, продаж и рисков
-- конкурентный анализ
-- рекомендации по улучшению модели
-- ключевые угрозы
-- вывод: стоит / есть смысл протестировать / не стоит заходить
-"""
-    else:
-        prompt_type = "BASE"
-        instructions = """
-Ты — бизнес-аналитик. Составь короткий, упрощённый отчёт.
-Без прогноза, без глубокого анализа рисков, без решения.
-
-Формат ответа:
-- краткое описание ситуации
-- важные моменты, которые стоит учесть
-"""
-
-    prompt = f"""
-Тип анализа: {prompt_type}
-
-Данные пользователя (JSON):
-{json.dumps(base_info, ensure_ascii=False, indent=2)}
-
-Сводная таблица:
-\"\"\"
-{raw_summary}
-\"\"\"
-
-{instructions}
-
-Верни строго JSON:
-
-Если PREMIUM:
-{{
-  "report": "...",
-  "forecast": "...",
-  "risks": "...",
-  "decision": "стоит заходить" | "есть смысл протестировать" | "не стоит заходить"
-}}
-
-Если BASE:
-{{
-  "report": "краткий текст"
-}}
-
-Не используй markdown. Не пиши ничего вне JSON.
-"""
-
-    return prompt
+# =========================
+# BASE PROMPT
+# =========================
+def build_base_prompt(data: dict) -> str:
+    return (
+        "Вы — Artbazar AI.\n"
+        "Ниже данные товара. Сформируйте простой, понятный и честный анализ.\n\n"
+        f"Ниша: {data['niche']}\n"
+        f"Товар: {data['product']}\n"
+        f"Закупочная цена: {data['price_buy']}\n"
+        f"Цена продажи: {data['price_sell']}\n"
+        f"Комиссия: {data['commission_percent']}%\n"
+        f"Логистика: {data['logistics']}\n"
+        f"Доставка: {data['delivery']}\n"
+        f"Маркетинг: {data['marketing']}\n"
+        f"Прочие расходы: {data['other']}\n"
+        f"Конкуренция: {data['competition']}\n"
+        f"Сезонность: {data['seasonality']}\n"
+        f"Риски: {data['risks']}\n\n"
+        "Сформируйте:\n"
+        "1) Короткий разбор расходов.\n"
+        "2) Прогноз маржи.\n"
+        "3) Основные риски.\n"
+        "4) Рекомендации по улучшению.\n"
+    )
 
 
-# ---------------------------------------------------------
-#  OPENAI CALLER
-# ---------------------------------------------------------
+# =========================
+# PREMIUM PROMPT
+# =========================
+def build_premium_prompt(data: dict) -> str:
+    return (
+        "Вы — Artbazar AI Premium. Дайте глубокую аналитику.\n\n"
+        "Используйте структуру Variant C.\n\n"
+        f"Ниша: {data['niche']}\n"
+        f"Товар: {data['product']}\n"
+        f"Закупочная цена: {data['price_buy']}\n"
+        f"Цена продажи: {data['price_sell']}\n"
+        f"Комиссия: {data['commission_percent']}%\n"
+        f"Логистика: {data['logistics']}\n"
+        f"Доставка: {data['delivery']}\n"
+        f"Маркетинг: {data['marketing']}\n"
+        f"Прочие расходы: {data['other']}\n"
+        f"Конкуренция: {data['competition']}\n"
+        f"Сезонность: {data['seasonality']}\n"
+        f"Риски: {data['risks']}\n\n"
+        "Структура:\n"
+        "📊 Полный разбор товара\n"
+        "💰 Финансовый расчёт\n"
+        "📈 Потенциал товара\n"
+        "⚠ Риски и сезонность\n"
+        "🧠 AI-выводы\n"
+        "🔧 Рекомендации на 7 дней\n"
+    )
 
-def _call_openai(prompt: str, is_premium: bool) -> Dict[str, Any]:
+
+# =========================
+# Запрос к OpenAI
+# =========================
+def call_openai(prompt: str) -> str:
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "Ты бизнес-аналитик Artbazar AI."},
-                {"role": "user", "content": prompt},
-            ],
+            model="gpt-4.1-mini",
             temperature=0.4,
-            max_tokens=1000 if is_premium else 300,
+            messages=[
+                {"role": "system", "content": "Вы — аналитик Artbazar AI."},
+                {"role": "user", "content": prompt},
+            ]
         )
 
-        content = response.choices[0].message.content
-        data = json.loads(content)
-
-        if is_premium:
-            return {
-                "report": data.get("report", "").strip(),
-                "forecast": data.get("forecast", "").strip(),
-                "risks": data.get("risks", "").strip(),
-                "decision": data.get("decision", "").strip(),
-            }
-        else:
-            return {
-                "report": data.get("report", "").strip(),
-                "forecast": "",
-                "risks": "",
-                "decision": "",
-            }
+        text = response.choices[0].message.content.strip()
+        return text.replace("*", "")  # убираем markdown-символы телеграма
 
     except Exception as e:
-        return {
-            "report": f"AI-анализ временно недоступен (ошибка: {e})",
-            "forecast": "",
-            "risks": "",
-            "decision": "",
-        }
+        logger.error(f"OpenAI error: {e}")
+        return "Ошибка при обращении к AI. Попробуйте позже."
 
 
-# ---------------------------------------------------------
-#  MAIN FUNCTION → used by handlers
-# ---------------------------------------------------------
+# =========================
+# Финальная функция анализа
+# =========================
+async def finalize_analysis(update, context, data: dict):
 
-async def analyze_artbazar_table(
-    table_data: Dict[str, Any],
-    metrics: Dict[str, Any],
-    raw_summary: str,
-    is_premium: bool
-) -> Dict[str, Any]:
+    user_id = update.effective_user.id
+    premium = is_user_premium(user_id)
 
-    prompt = _build_prompt(table_data, metrics, raw_summary, is_premium)
-    return _call_openai(prompt, is_premium)
+    if premium:
+        prompt = build_premium_prompt(data)
+    else:
+        prompt = build_base_prompt(data)
+
+    await update.message.reply_text("AI анализирует данные… ⚙️")
+
+    result = call_openai(prompt)
+
+    # сохраняем в историю
+    save_analysis_history(user_id, data, result)
+
+    await update.message.reply_text(result)

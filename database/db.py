@@ -1,260 +1,258 @@
-import os
-from datetime import datetime, timedelta
+import sqlite3
+from datetime import datetime
 
-import psycopg2
-from psycopg2.extras import RealDictCursor
+DB_PATH = "database/artbazar.db"
 
-# Берём строку подключения из переменной окружения
-DATABASE_URL = os.getenv("DATABASE_URL")
+
+# ==================================================
+# CONNECTION
+# ==================================================
+
+def get_db_connection():
+    return sqlite3.connect(DB_PATH)
 
 
 def get_connection():
-    """
-    Создаёт подключение к PostgreSQL.
-    """
-    if not DATABASE_URL:
-        raise RuntimeError("DATABASE_URL не задан. Проверь .env и Variables в Railway.")
-    return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    return get_db_connection()
 
+
+# ==================================================
+# SCHEMA HELPERS
+# ==================================================
+
+def _get_existing_columns(cur, table_name: str) -> set:
+    cur.execute(f"PRAGMA table_info({table_name})")
+    rows = cur.fetchall()
+    # PRAGMA table_info: (cid, name, type, notnull, dflt_value, pk)
+    return {r[1] for r in rows}
+
+
+def _ensure_users_schema(cur):
+    """
+    ВАЖНО:
+    - если база уже существует и таблица users создана по старой схеме,
+      CREATE TABLE IF NOT EXISTS не добавит новые колонки.
+    - поэтому делаем безопасное добавление недостающих колонок через ALTER TABLE.
+    """
+    # таблица (на случай если её вообще нет)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        telegram_id INTEGER PRIMARY KEY,
+        username TEXT,
+        first_name TEXT,
+        role TEXT DEFAULT 'user',
+        is_premium INTEGER DEFAULT 0,
+        premium_until TEXT,
+        created_at TEXT,
+        updated_at TEXT
+    )
+    """)
+
+    cols = _get_existing_columns(cur, "users")
+
+    # добавляем недостающие колонки безопасно
+    if "username" not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN username TEXT")
+        cols.add("username")
+
+    if "first_name" not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN first_name TEXT")
+        cols.add("first_name")
+
+    if "role" not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'")
+        cols.add("role")
+
+    if "is_premium" not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN is_premium INTEGER DEFAULT 0")
+        cols.add("is_premium")
+
+    if "premium_until" not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN premium_until TEXT")
+        cols.add("premium_until")
+
+    if "created_at" not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN created_at TEXT")
+        cols.add("created_at")
+
+    if "updated_at" not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN updated_at TEXT")
+        cols.add("updated_at")
+
+
+# ==================================================
+# INIT
+# ==================================================
 
 def init_db():
-    """
-    Создаёт таблицы в PostgreSQL, если их ещё нет.
-    """
-    conn = get_connection()
-    cursor = conn.cursor()
+    conn = get_db_connection()
+    cur = conn.cursor()
 
-    # Таблица пользователей
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS users (
-            user_id BIGINT PRIMARY KEY,
-            username TEXT,
-            first_name TEXT,
-            last_name TEXT,
-            role TEXT DEFAULT 'user',
-            premium_until TIMESTAMPTZ
-        );
-        """
-    )
+    _ensure_users_schema(cur)
 
-    # Таблица истории анализов
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS analysis_history (
-            id SERIAL PRIMARY KEY,
-            user_id BIGINT REFERENCES users(user_id),
-            table_json TEXT,
-            ai_json TEXT,
-            created_at TIMESTAMPTZ
-        );
-        """
-    )
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+    # безопасное заполнение времени
+    cur.execute("UPDATE users SET created_at = COALESCE(created_at, ?)", (now,))
+    cur.execute("UPDATE users SET updated_at = COALESCE(updated_at, ?)", (now,))
 
     conn.commit()
     conn.close()
 
 
-# -------- USERS --------
+# ==================================================
+# USERS
+# ==================================================
 
+def create_or_update_user(telegram_id: int, username: str, first_name: str):
+    conn = get_db_connection()
+    cur = conn.cursor()
 
-def get_user(user_id: int):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
-    user = cursor.fetchone()
+    _ensure_users_schema(cur)
+
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+    username = (username or "").lstrip("@")
+    first_name = first_name or ""
+
+    cur.execute(
+        "SELECT telegram_id FROM users WHERE telegram_id = ?",
+        (telegram_id,),
+    )
+
+    if cur.fetchone():
+        cur.execute(
+            """
+            UPDATE users
+            SET username = ?, first_name = ?, updated_at = ?
+            WHERE telegram_id = ?
+            """,
+            (username, first_name, now, telegram_id),
+        )
+    else:
+        cur.execute(
+            """
+            INSERT INTO users
+            (telegram_id, username, first_name, role, is_premium, created_at, updated_at)
+            VALUES (?, ?, ?, 'user', 0, ?, ?)
+            """,
+            (telegram_id, username, first_name, now, now),
+        )
+
+    conn.commit()
     conn.close()
-    return user
+
+
+def get_user_role(telegram_id: int) -> str:
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    _ensure_users_schema(cur)
+
+    cur.execute(
+        "SELECT role FROM users WHERE telegram_id = ?",
+        (telegram_id,),
+    )
+    row = cur.fetchone()
+    conn.close()
+
+    return row[0] if row else "user"
+
+
+def set_role_by_telegram_id(telegram_id: int, role: str) -> bool:
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    _ensure_users_schema(cur)
+
+    cur.execute(
+        "UPDATE users SET role = ?, updated_at = ? WHERE telegram_id = ?",
+        (role, datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"), telegram_id),
+    )
+
+    ok = cur.rowcount > 0
+    conn.commit()
+    conn.close()
+    return ok
 
 
 def get_user_by_username(username: str):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
-    user = cursor.fetchone()
-    conn.close()
-    return user
+    conn = get_db_connection()
+    cur = conn.cursor()
 
+    _ensure_users_schema(cur)
 
-def create_or_update_user(user_id, username, first_name, last_name):
-    conn = get_connection()
-    cursor = conn.cursor()
+    username = (username or "").lstrip("@")
 
-    cursor.execute("SELECT user_id FROM users WHERE user_id = %s", (user_id,))
-    exists = cursor.fetchone()
-
-    if exists:
-        cursor.execute(
-            """
-            UPDATE users
-            SET username = %s,
-                first_name = %s,
-                last_name = %s
-            WHERE user_id = %s
-            """,
-            (username, first_name, last_name, user_id),
-        )
-    else:
-        cursor.execute(
-            """
-            INSERT INTO users (user_id, username, first_name, last_name)
-            VALUES (%s, %s, %s, %s)
-            """,
-            (user_id, username, first_name, last_name),
-        )
-
-    conn.commit()
-    conn.close()
-
-
-# -------- PREMIUM --------
-
-
-def set_premium(user_id: int, days: int):
-    """
-    Выдаёт Premium на X дней или продлевает, если Premium уже есть.
-    """
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT premium_until FROM users WHERE user_id = %s", (user_id,))
-    row = cursor.fetchone()
-
-    now = datetime.utcnow()
-
-    if row and row["premium_until"]:
-        try:
-            current_until = row["premium_until"]
-        except Exception:
-            current_until = now
-    else:
-        current_until = now
-
-    new_until = max(now, current_until) + timedelta(days=days)
-
-    cursor.execute(
-        """
-        UPDATE users
-        SET premium_until = %s
-        WHERE user_id = %s
-        """,
-        (new_until, user_id),
+    cur.execute(
+        "SELECT telegram_id, username, role FROM users WHERE username = ?",
+        (username,),
     )
-
-    conn.commit()
+    row = cur.fetchone()
     conn.close()
 
-
-def remove_premium(user_id: int):
-    """
-    Полностью отключает Premium.
-    """
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        """
-        UPDATE users
-        SET premium_until = NULL
-        WHERE user_id = %s
-        """,
-        (user_id,),
-    )
-
-    conn.commit()
-    conn.close()
-
-
-def get_all_premium_users():
-    """
-    Возвращает всех пользователей, у которых есть премиум.
-    """
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        """
-        SELECT user_id, username, premium_until
-        FROM users
-        WHERE premium_until IS NOT NULL
-        """
-    )
-
-    rows = cursor.fetchall()
-    conn.close()
-    return rows
-
-
-def disable_expired_premium():
-    """
-    Автоматически отключает премиум у всех, чей срок истёк.
-    """
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    now = datetime.utcnow()
-
-    cursor.execute(
-        """
-        UPDATE users
-        SET premium_until = NULL
-        WHERE premium_until <= %s
-        """,
-        (now,),
-    )
-
-    conn.commit()
-    conn.close()
-
-
-# -------- ROLES & STATS --------
-
-
-def set_role(user_id: int, role: str):
-    """
-    Устанавливает роль пользователю: 'user' / 'manager' / 'owner'.
-    """
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        """
-        UPDATE users
-        SET role = %s
-        WHERE user_id = %s
-        """,
-        (role, user_id),
-    )
-
-    conn.commit()
-    conn.close()
-
-
-def get_stats():
-    """
-    Возвращает базовую статистику:
-    - total_users
-    - premium_users
-    - managers
-    """
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT COUNT(*) AS cnt FROM users")
-    total_users = cursor.fetchone()["cnt"]
-
-    cursor.execute("SELECT COUNT(*) AS cnt FROM users WHERE role = 'manager'")
-    managers = cursor.fetchone()["cnt"]
-
-    cursor.execute(
-        "SELECT COUNT(*) AS cnt FROM users WHERE premium_until IS NOT NULL"
-    )
-    premium_users = cursor.fetchone()["cnt"]
-
-    conn.close()
+    if not row:
+        return None
 
     return {
-        "total_users": total_users,
-        "premium_users": premium_users,
-        "managers": managers,
+        "telegram_id": row[0],
+        "username": row[1],
+        "role": row[2],
     }
+
+
+# ==================================================
+# PREMIUM
+# ==================================================
+
+def is_user_premium(telegram_id: int) -> bool:
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    _ensure_users_schema(cur)
+
+    cur.execute(
+        "SELECT is_premium, premium_until FROM users WHERE telegram_id = ?",
+        (telegram_id,),
+    )
+    row = cur.fetchone()
+    conn.close()
+
+    if not row:
+        return False
+
+    is_premium, premium_until = row
+
+    if not is_premium:
+        return False
+
+    if premium_until:
+        try:
+            until = datetime.strptime(premium_until, "%Y-%m-%d %H:%M:%S")
+            return until > datetime.utcnow()
+        except Exception:
+            return False
+
+    return True
+
+
+# ==================================================
+# STATS
+# ==================================================
+
+def get_stats():
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    _ensure_users_schema(cur)
+
+    stats = {}
+    for role in ["user", "manager", "owner"]:
+        cur.execute("SELECT COUNT(*) FROM users WHERE role = ?", (role,))
+        stats[role] = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM users WHERE is_premium = 1")
+    stats["premium"] = cur.fetchone()[0]
+
+    conn.close()
+    return stats

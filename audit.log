@@ -1,0 +1,21 @@
+2025-12-12 08:21:20,638 | === AUDIT LOG INITIALIZED ===
+2025-12-12 08:21:21,680 | HTTP Request: POST https://api.telegram.org/bot8389875803:AAH0sjImOQ_TXvRr2VIma0vueK0T1sXqofM/getMe "HTTP/1.1 200 OK"
+2025-12-12 08:21:21,913 | HTTP Request: POST https://api.telegram.org/bot8389875803:AAH0sjImOQ_TXvRr2VIma0vueK0T1sXqofM/deleteWebhook "HTTP/1.1 200 OK"
+2025-12-12 08:21:21,917 | Scheduler started
+2025-12-12 08:21:21,918 | Application started
+2025-12-12 08:21:32,375 | HTTP Request: POST https://api.telegram.org/bot8389875803:AAH0sjImOQ_TXvRr2VIma0vueK0T1sXqofM/getUpdates "HTTP/1.1 200 OK"
+2025-12-12 08:21:42,532 | HTTP Request: POST https://api.telegram.org/bot8389875803:AAH0sjImOQ_TXvRr2VIma0vueK0T1sXqofM/getUpdates "HTTP/1.1 200 OK"
+2025-12-12 08:21:52,675 | HTTP Request: POST https://api.telegram.org/bot8389875803:AAH0sjImOQ_TXvRr2VIma0vueK0T1sXqofM/getUpdates "HTTP/1.1 200 OK"
+2025-12-12 08:22:02,819 | HTTP Request: POST https://api.telegram.org/bot8389875803:AAH0sjImOQ_TXvRr2VIma0vueK0T1sXqofM/getUpdates "HTTP/1.1 200 OK"
+2025-12-12 08:22:12,957 | HTTP Request: POST https://api.telegram.org/bot8389875803:AAH0sjImOQ_TXvRr2VIma0vueK0T1sXqofM/getUpdates "HTTP/1.1 200 OK"
+2025-12-12 08:22:23,097 | HTTP Request: POST https://api.telegram.org/bot8389875803:AAH0sjImOQ_TXvRr2VIma0vueK0T1sXqofM/getUpdates "HTTP/1.1 200 OK"
+2025-12-12 08:22:33,230 | HTTP Request: POST https://api.telegram.org/bot8389875803:AAH0sjImOQ_TXvRr2VIma0vueK0T1sXqofM/getUpdates "HTTP/1.1 200 OK"
+2025-12-12 08:22:43,380 | HTTP Request: POST https://api.telegram.org/bot8389875803:AAH0sjImOQ_TXvRr2VIma0vueK0T1sXqofM/getUpdates "HTTP/1.1 200 OK"
+2025-12-12 08:22:53,524 | HTTP Request: POST https://api.telegram.org/bot8389875803:AAH0sjImOQ_TXvRr2VIma0vueK0T1sXqofM/getUpdates "HTTP/1.1 200 OK"
+2025-12-12 08:23:03,683 | HTTP Request: POST https://api.telegram.org/bot8389875803:AAH0sjImOQ_TXvRr2VIma0vueK0T1sXqofM/getUpdates "HTTP/1.1 200 OK"
+2025-12-12 08:23:13,829 | HTTP Request: POST https://api.telegram.org/bot8389875803:AAH0sjImOQ_TXvRr2VIma0vueK0T1sXqofM/getUpdates "HTTP/1.1 200 OK"
+2025-12-12 08:23:23,980 | HTTP Request: POST https://api.telegram.org/bot8389875803:AAH0sjImOQ_TXvRr2VIma0vueK0T1sXqofM/getUpdates "HTTP/1.1 200 OK"
+2025-12-12 08:23:34,118 | HTTP Request: POST https://api.telegram.org/bot8389875803:AAH0sjImOQ_TXvRr2VIma0vueK0T1sXqofM/getUpdates "HTTP/1.1 200 OK"
+2025-12-12 08:23:44,179 | Application is stopping. This might take a moment.
+2025-12-12 08:23:44,180 | Scheduler has been shut down
+2025-12-12 08:23:44,180 | Application.stop() complete

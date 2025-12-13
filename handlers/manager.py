@@ -1,114 +1,173 @@
-from telegram import Update
-from telegram.ext import ContextTypes
-from datetime import timedelta, datetime
+import os
+import sqlite3
+from datetime import datetime, timedelta
 
-from config import MANAGER_ID
-from database.models import get_user_by_username, set_premium, remove_premium
+from telegram import (
+    Update,
+    ReplyKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardRemove,
+)
+from telegram.ext import (
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
+
+from database.db import get_user_role
+
+# ==================================================
+# BUTTONS
+# ==================================================
+
+BTN_ACTIVATE_PREMIUM = "🟢 Активировать Premium"
+
+# ==================================================
+# FSM
+# ==================================================
+
+FSM_WAIT_PREMIUM_INPUT = "wait_premium_input"
+
+# ==================================================
+# KEYBOARD
+# ==================================================
+
+def manager_keyboard():
+    return ReplyKeyboardMarkup(
+        [[KeyboardButton(BTN_ACTIVATE_PREMIUM)]],
+        resize_keyboard=True,
+    )
+
+# ==================================================
+# DB helpers (локально, без правки database/db.py)
+# ==================================================
+
+def _db_path() -> str:
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_dir, "database", "artbazar.db")
 
 
-# Проверка роли менеджера
-def is_manager(user_id: int) -> bool:
-    return user_id == MANAGER_ID
+def _get_columns(conn) -> set:
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info(users)")
+    rows = cur.fetchall()
+    return {r[1] for r in rows}
 
 
-# Нормализация username
-def normalize_username(name: str) -> str:
-    """
-    Убирает @ и пробелы.
-    """
-    name = name.strip()
-    if name.startswith("@"):
-        name = name[1:]
-    return name
+def set_premium_by_username(username: str, days: int) -> bool:
+    username = (username or "").replace("@", "").strip()
+    if not username or days <= 0:
+        return False
 
+    conn = sqlite3.connect(_db_path())
+    try:
+        cols = _get_columns(conn)
+        cur = conn.cursor()
 
-# Выдача Premium по username
-async def give_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        cur.execute("SELECT telegram_id FROM users WHERE username = ?", (username,))
+        row = cur.fetchone()
+        if not row:
+            return False
 
-    if not is_manager(update.effective_user.id):
-        await update.message.reply_text("У вас нет прав менеджера.")
+        now = datetime.utcnow()
+        premium_until = (now + timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+
+        if "premium_until" in cols:
+            cur.execute(
+                "UPDATE users SET is_premium = 1, premium_until = ?, updated_at = ? WHERE username = ?",
+                (premium_until, now.strftime("%Y-%m-%d %H:%M:%S"), username),
+            )
+        else:
+            if "updated_at" in cols:
+                cur.execute(
+                    "UPDATE users SET is_premium = 1, updated_at = ? WHERE username = ?",
+                    (now.strftime("%Y-%m-%d %H:%M:%S"), username),
+                )
+            else:
+                cur.execute(
+                    "UPDATE users SET is_premium = 1 WHERE username = ?",
+                    (username,),
+                )
+
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+# ==================================================
+# ACTIONS
+# ==================================================
+
+async def on_activate_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if get_user_role(update.effective_user.id) != "manager":
         return
 
-    if len(context.args) != 2:
-        await update.message.reply_text("Формат: /give_premium @username <days>")
-        return
-
-    username = normalize_username(context.args[0])
-    days = int(context.args[1])
-
-    user = get_user_by_username(username)
-
-    if not user:
-        await update.message.reply_text(
-            f"Пользователь @{username} не найден. Он ещё не запускал бота."
-        )
-        return
-
-    target_id = user[0]  # user_id из таблицы users
-
-    set_premium(target_id, days)
+    context.user_data[FSM_WAIT_PREMIUM_INPUT] = True
 
     await update.message.reply_text(
-        f"Premium выдан пользователю @{username} на {days} дней."
+        "🟢 *Активация Premium*\n\n"
+        "Отправь одной строкой:\n"
+        "`@username дни`\n\n"
+        "Пример:\n"
+        "`@test_user 30`",
+        parse_mode="Markdown",
+        reply_markup=ReplyKeyboardRemove(),
     )
 
 
-# Продление Premium
-async def extend_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    if not is_manager(update.effective_user.id):
-        await update.message.reply_text("У вас нет прав менеджера.")
+async def on_premium_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if get_user_role(update.effective_user.id) != "manager":
         return
 
-    if len(context.args) != 2:
-        await update.message.reply_text("Формат: /extend_premium @username <days>")
-        return
+    if not context.user_data.get(FSM_WAIT_PREMIUM_INPUT):
+        return  # ❗ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ
 
-    username = normalize_username(context.args[0])
-    days = int(context.args[1])
+    text = (update.message.text or "").strip()
+    parts = text.split()
 
-    user = get_user_by_username(username)
-
-    if not user:
+    if len(parts) != 2:
         await update.message.reply_text(
-            f"Пользователь @{username} не найден."
+            "❌ Неверный формат.\nИспользуй:\n`@username дни`",
+            parse_mode="Markdown",
         )
         return
 
-    target_id = user[0]
+    username = parts[0].replace("@", "").strip()
+    try:
+        days = int(parts[1])
+    except ValueError:
+        await update.message.reply_text("❌ Количество дней должно быть числом.")
+        return
 
-    set_premium(target_id, days)
+    ok = set_premium_by_username(username, days)
+    if not ok:
+        await update.message.reply_text("❌ Пользователь не найден.")
+        return
+
+    context.user_data.pop(FSM_WAIT_PREMIUM_INPUT, None)
 
     await update.message.reply_text(
-        f"Premium продлён пользователю @{username} на {days} дней."
+        f"✅ Premium активирован\n\n"
+        f"👤 @{username}\n"
+        f"⏳ Дней: {days}",
+        reply_markup=manager_keyboard(),
     )
 
+# ==================================================
+# REGISTER
+# ==================================================
 
-# Отключение Premium
-async def remove_premium_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    if not is_manager(update.effective_user.id):
-        await update.message.reply_text("У вас нет прав менеджера.")
-        return
-
-    if len(context.args) != 1:
-        await update.message.reply_text("Формат: /remove_premium @username")
-        return
-
-    username = normalize_username(context.args[0])
-    user = get_user_by_username(username)
-
-    if not user:
-        await update.message.reply_text(
-            f"Пользователь @{username} не найден."
-        )
-        return
-
-    target_id = user[0]
-
-    remove_premium(target_id)
-
-    await update.message.reply_text(
-        f"Premium отключён у пользователя @{username}."
+def register_manager_handlers(app):
+    app.add_handler(
+        MessageHandler(
+            filters.Regex(f"^{BTN_ACTIVATE_PREMIUM}$"),
+            on_activate_premium,
+        ),
+        group=1,
     )
 
+    # FSM input — ТОЛЬКО при активном режиме
+    app.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, on_premium_input),
+        group=3,
+    )

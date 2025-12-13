@@ -1,114 +1,193 @@
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import (
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
-from telegram import Update
-from telegram.ext import ContextTypes
+from database.db import (
+    get_user_by_username,
+    set_role_by_telegram_id,
+    get_stats,
+    get_user_role,
+)
 
-from config import OWNER_ID
-from database.models import get_stats, get_user_by_username, set_role
+# ==================================================
+# OWNER KEYBOARD
+# ==================================================
 
+OWNER_MENU = ReplyKeyboardMarkup(
+    [
+        ["➕ Добавить менеджера", "➖ Удалить менеджера"],
+        ["📊 Статистика"],
+    ],
+    resize_keyboard=True,
+)
 
-def is_owner(user_id: int) -> bool:
-    return user_id == OWNER_ID
+OWNER_START_KB = ReplyKeyboardMarkup(
+    [["👑 Панель владельца"]],
+    resize_keyboard=True,
+)
 
+# ==================================================
+# TEXTS
+# ==================================================
 
-def normalize_username(name: str) -> str:
-    name = name.strip()
-    if name.startswith("@"):
-        name = name[1:]
-    return name
+OWNER_START_TEXT = (
+    "Привет, босс 👋\n\n"
+    "Смотрим на Artbazar AI спокойно и стратегически.\n\n"
+    "Проект сейчас в рабочем MVP-состоянии.\n"
+    "Ниже — фокус развития, чтобы держать направление.\n\n"
+    "🎯 Фокус Artbazar AI:\n\n"
+    "1️⃣ Монетизация\n"
+    "— самостоятельная покупка Premium\n"
+    "— подписки и автопродление\n"
+    "— локальные платежи (Kaspi и др.)\n\n"
+    "2️⃣ Масштабирование продукта\n"
+    "— Artbazar AI как бренд\n"
+    "— SaaS / B2B-версия\n"
+    "— white-label для партнёров\n\n"
+    "3️⃣ Умная аналитика\n"
+    "— персональные AI-рекомендации\n"
+    "— прогноз спроса и рисков\n\n"
+    "Это не срочно.\n"
+    "Это вектор движения."
+)
 
+# ==================================================
+# OWNER ENTRY (вызывается из main.py)
+# ==================================================
 
-async def owner_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Главное меню владельца.
-    """
-    user_id = update.effective_user.id
+async def owner_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
 
-    if not is_owner(user_id):
-        await update.message.reply_text("У вас нет прав владельца.")
-        return
-
-    text = (
-        "👑 Панель владельца Artbazar AI\n\n"
-        "/owner_stats — статистика пользователей\n"
-        "/add_manager @username — назначить менеджера\n"
-        "/remove_manager @username — убрать менеджера\n"
+    await update.message.reply_text(
+        OWNER_START_TEXT,
+        reply_markup=OWNER_START_KB,
     )
-    await update.message.reply_text(text)
 
+# ==================================================
+# OWNER MAIN PANEL
+# ==================================================
 
-async def owner_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Статистика по базе.
-    """
-    user_id = update.effective_user.id
-
-    if not is_owner(user_id):
-        await update.message.reply_text("У вас нет прав владельца.")
+async def open_owner_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if get_user_role(update.effective_user.id) != "owner":
         return
+
+    context.user_data.clear()
+
+    await update.message.reply_text(
+        "👑 Панель владельца",
+        reply_markup=OWNER_MENU,
+    )
+
+# ==================================================
+# FSM STARTERS
+# ==================================================
+
+async def start_add_manager(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if get_user_role(update.effective_user.id) != "owner":
+        return
+
+    context.user_data["owner_mode"] = "add_manager"
+    await update.message.reply_text(
+        "Отправь username или telegram_id пользователя"
+    )
+
+
+async def start_remove_manager(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if get_user_role(update.effective_user.id) != "owner":
+        return
+
+    context.user_data["owner_mode"] = "remove_manager"
+    await update.message.reply_text(
+        "Отправь username или telegram_id пользователя"
+    )
+
+# ==================================================
+# STATS
+# ==================================================
+
+async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if get_user_role(update.effective_user.id) != "owner":
+        return
+
+    context.user_data.clear()
 
     stats = get_stats()
-
     text = (
-        "📊 Статистика Artbazar AI\n\n"
-        f"Всего пользователей: {stats['total_users']}\n"
-        f"Premium пользователей: {stats['premium_users']}\n"
-        f"Менеджеров: {stats['managers']}\n"
+        "📊 Статистика бота:\n\n"
+        f"👤 Пользователи: {stats['user']}\n"
+        f"🧑‍💼 Менеджеры: {stats['manager']}\n"
+        f"👑 Владельцы: {stats['owner']}\n"
+        f"⭐ Premium: {stats['premium']}"
     )
-
     await update.message.reply_text(text)
 
+# ==================================================
+# FSM HANDLER
+# ==================================================
 
-async def add_manager(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Назначение менеджера по username.
-    Формат: /add_manager @username
-    """
-    user_id = update.effective_user.id
-
-    if not is_owner(user_id):
-        await update.message.reply_text("У вас нет прав владельца.")
+async def handle_owner_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if get_user_role(update.effective_user.id) != "owner":
         return
 
-    if len(context.args) != 1:
-        await update.message.reply_text("Формат: /add_manager @username")
+    mode = context.user_data.get("owner_mode")
+    if not mode:
         return
 
-    username = normalize_username(context.args[0])
-    user = get_user_by_username(username)
+    raw = update.message.text.strip().lstrip("@")
 
-    if not user:
-        await update.message.reply_text(f"Пользователь @{username} не найден в базе.")
-        return
+    telegram_id = None
 
-    target_id = user[0]
-    set_role(target_id, "manager")
+    if raw.isdigit():
+        telegram_id = int(raw)
+    else:
+        user = get_user_by_username(raw)
+        if not user:
+            await update.message.reply_text("❌ Пользователь не найден")
+            return
+        telegram_id = user["telegram_id"]
 
-    await update.message.reply_text(f"Пользователь @{username} назначен менеджером.")
+    if mode == "add_manager":
+        ok = set_role_by_telegram_id(telegram_id, "manager")
+        msg = "✅ Менеджер успешно добавлен" if ok else "❌ Не удалось назначить менеджера"
+        await update.message.reply_text(msg)
 
+    elif mode == "remove_manager":
+        ok = set_role_by_telegram_id(telegram_id, "user")
+        msg = "✅ Менеджер удалён" if ok else "❌ Не удалось удалить менеджера"
+        await update.message.reply_text(msg)
 
-async def remove_manager(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Удаление менеджера (возврат к роли user).
-    Формат: /remove_manager @username
-    """
-    user_id = update.effective_user.id
+    context.user_data.clear()
+    await open_owner_menu(update, context)
 
-    if not is_owner(user_id):
-        await update.message.reply_text("У вас нет прав владельца.")
-        return
+# ==================================================
+# REGISTER
+# ==================================================
 
-    if len(context.args) != 1:
-        await update.message.reply_text("Формат: /remove_manager @username")
-        return
+def register_owner_handlers(app):
+    app.add_handler(
+        MessageHandler(filters.Regex("^👑 Панель владельца$"), open_owner_menu),
+        group=1,
+    )
 
-    username = normalize_username(context.args[0])
-    user = get_user_by_username(username)
+    app.add_handler(
+        MessageHandler(filters.Regex("^➕ Добавить менеджера$"), start_add_manager),
+        group=1,
+    )
 
-    if not user:
-        await update.message.reply_text(f"Пользователь @{username} не найден.")
-        return
+    app.add_handler(
+        MessageHandler(filters.Regex("^➖ Удалить менеджера$"), start_remove_manager),
+        group=1,
+    )
 
-    target_id = user[0]
-    set_role(target_id, "user")
+    app.add_handler(
+        MessageHandler(filters.Regex("^📊 Статистика$"), show_stats),
+        group=1,
+    )
 
-    await update.message.reply_text(f"Пользователь @{username} больше не менеджер.")
+    app.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_owner_input),
+        group=2,
+    )
