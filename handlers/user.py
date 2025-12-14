@@ -733,14 +733,38 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =============================
 
 def register_handlers_user(app):
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
-from handlers.profile import on_profile, on_export_excel, on_export_pdf
-from handlers.profile import (
-    on_profile,
-    on_export_excel,
-    on_export_pdf,
-)
+    # импорт внутри функции — КАНОН
+    from handlers.profile import (
+        on_profile,
+        on_export_excel,
+        on_export_pdf,
+    )
 
-app.add_handler(MessageHandler(filters.Regex("^👤 Личный кабинет$"), on_profile))
-app.add_handler(MessageHandler(filters.Regex("^📊 Скачать Excel$"), on_export_excel))
-app.add_handler(MessageHandler(filters.Regex("^📄 Скачать PDF$"), on_export_pdf))
+    # основной текстовый роутер
+    app.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, text_router)
+    )
+
+    # 👤 Личный кабинет
+    app.add_handler(
+        MessageHandler(
+            filters.Regex(r"^👤 Личный кабинет$"),
+            on_profile
+        )
+    )
+
+    # 📊 Экспорт Excel
+    app.add_handler(
+        MessageHandler(
+            filters.Regex(r"^📊 Скачать Excel$"),
+            on_export_excel
+        )
+    )
+
+    # 📄 Экспорт PDF
+    app.add_handler(
+        MessageHandler(
+            filters.Regex(r"^📄 Скачать PDF$"),
+            on_export_pdf
+        )
+    )
