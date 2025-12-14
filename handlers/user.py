@@ -72,12 +72,12 @@ PREMIUM_KEY = "premium"
 async def cmd_start_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
 
-	if "lang" not in context.user_data:
-        	context.user_data["lang"] = "ru"
-
+    if "lang" not in context.user_data:
+        context.user_data["lang"] = "ru"
 
     user = update.effective_user
     name = user.first_name or user.username or "друг"
+    lang = context.user_data["lang"]
 
     await update.message.reply_text(
         t(lang, "start_greeting", name=name),
