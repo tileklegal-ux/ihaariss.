@@ -95,14 +95,14 @@ async def cmd_start_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         f"Привет, {name} 👋\n\n"
-        "Ты в Artbazar AI — помощнике для предпринимателей.\n\n"
-        "Здесь ты можешь:\n"
-        "• проверить идею\n"
-        "• понять риски\n"
-        "• выбрать нишу\n"
-        "• принять решение спокойнее\n\n"
-        "⚠️ Бот не обещает прибыль.\n"
-        "Он помогает думать трезво.\n\n"
+        "Ты в Artbazar AI — аналитическом помощнике для предпринимателей.\n\n"
+        "Я помогаю:\n"
+        "• разобраться в цифрах\n"
+        "• увидеть слабые места\n"
+        "• выбрать следующий шаг\n\n"
+        "⚠️ Важно:\n"
+        "Любая аналитика — это ориентир, а не гарантия.\n"
+        "Решения всегда остаются за тобой.\n\n"
         "Продолжим?",
         reply_markup=ReplyKeyboardMarkup(
             [[KeyboardButton(BTN_YES), KeyboardButton(BTN_NO)]],
@@ -128,7 +128,9 @@ async def on_no(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def on_business_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "📊 Бизнес-анализ\n\nРазберём цифры и логику.",
+        "📊 Бизнес-анализ\n\n"
+        "Здесь мы смотрим на цифры и логику бизнеса.\n"
+        "Без сложных терминов.",
         reply_markup=business_hub_keyboard(),
     )
 
@@ -140,27 +142,38 @@ async def on_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =============================
-# FSM 💰 ПРИБЫЛЬ
+# FSM 💰 ПРИБЫЛЬ И ДЕНЬГИ
 # =============================
 
 async def pm_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     context.user_data["pm_state"] = "revenue"
+
     await update.message.reply_text(
-        "💰 Введи выручку в месяц:",
-        reply_markup=ReplyKeyboardMarkup([[KeyboardButton(BTN_BACK)]], resize_keyboard=True),
+        "💰 Прибыль и деньги\n\n"
+        "Давай прикинем базовую экономику.\n\n"
+        "👉 Введи **выручку за месяц**.\n"
+        "Это все деньги, которые ты получил(а) от продаж за месяц.\n\n"
+        "Пример: 500000",
+        reply_markup=ReplyKeyboardMarkup(
+            [[KeyboardButton(BTN_BACK)]],
+            resize_keyboard=True,
+        ),
     )
 
 async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.replace(" ", "")
     if not text.isdigit():
-        await update.message.reply_text("Введи число.")
+        await update.message.reply_text("Введи число, без букв.")
         return
 
     if context.user_data.get("pm_state") == "revenue":
         context.user_data["revenue"] = int(text)
         context.user_data["pm_state"] = "expenses"
-        await update.message.reply_text("Теперь введи расходы:")
+        await update.message.reply_text(
+            "Теперь введи **все расходы за месяц**.\n"
+            "Закупка, реклама, доставка, аренда и т.д."
+        )
         return
 
     revenue = context.user_data["revenue"]
@@ -180,60 +193,65 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =============================
-# FSM 🚀 РОСТ
+# FSM 🚀 РОСТ И ПРОДАЖИ
 # =============================
 
 async def growth_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     context.user_data["growth"] = True
+
     await update.message.reply_text(
-        "🚀 Откуда сейчас приходят клиенты?",
+        "🚀 Рост и продажи\n\n"
+        "Выбери канал, откуда **сейчас** приходят клиенты.\n"
+        "Даже если он не идеальный — бери основной.",
         reply_markup=growth_channels_keyboard(),
     )
 
 async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     channel = update.message.text
     context.user_data.clear()
+
     await update.message.reply_text(
         f"📈 План роста:\n\n"
         f"Канал: {channel}\n\n"
         "1️⃣ Усиль поток клиентов\n"
-        "2️⃣ Проверь оффер\n"
+        "2️⃣ Проверь оффер и цену\n"
         "3️⃣ Убери узкие места\n\n"
         "Работай по одному шагу.",
         reply_markup=business_hub_keyboard(),
     )
 
 # =============================
-# 📦 АНАЛИТИКА ТОВАРА
+# 📦 АНАЛИТИКА ТОВАРА (ЗАГЛУШКА)
 # =============================
 
 async def ta_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📦 Аналитика товара\n\n"
-        "Помогает понять:\n"
-        "— есть ли спрос\n"
-        "— где риски\n"
-        "— стоит ли тестировать\n\n"
-        "Если есть сомнения — это тоже результат.",
+        "Этот раздел в разработке.\n"
+        "Скоро здесь можно будет проверить идею товара "
+        "и понять, стоит ли её тестировать.",
         reply_markup=main_menu_keyboard(),
     )
 
 # =============================
-# 🔎 ПОДБОР НИШИ
+# 🔎 ПОДБОР НИШИ (ЗАГЛУШКА)
 # =============================
 
 async def ns_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     context.user_data["niche"] = True
+
     await update.message.reply_text(
-        "🔎 Подбор ниши\n\nВыбери формат:",
+        "🔎 Подбор ниши\n\n"
+        "Выбери формат, который тебе ближе.",
         reply_markup=niche_keyboard(),
     )
 
 async def niche_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     choice = update.message.text
     context.user_data.clear()
+
     await update.message.reply_text(
         f"🎯 Рекомендация:\n\n"
         f"Формат: {choice}\n\n"
@@ -255,7 +273,7 @@ async def on_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def on_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "❤️ Premium\n\n"
-        "Персональная помощь менеджера.\n\n"
+        "Персональная помощь и расширенные рекомендации.\n\n"
         "📩 Напиши: @Artbazar_marketing",
         reply_markup=main_menu_keyboard(),
     )
