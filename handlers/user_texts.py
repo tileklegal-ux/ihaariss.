@@ -147,3 +147,7 @@ def t(lang: str, key: str, **kwargs) -> str:
     base = USER_TEXTS.get(lang) or USER_TEXTS["ru"]
     text = base.get(key) or USER_TEXTS["ru"].get(key, "")
     return text.format(**kwargs)
+
+
+# алиас для совместимости с handlers
+T = t
