@@ -1,7 +1,13 @@
 # -*- coding: utf-8 -*-
 
 import logging
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram import (
+    Update,
+    ReplyKeyboardMarkup,
+    KeyboardButton,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+)
 from telegram.ext import ContextTypes, MessageHandler, filters
 
 from handlers.user_keyboards import (
@@ -29,6 +35,7 @@ from handlers.user_helpers import (
     insights_bridge_text,
 )
 
+from handlers.user_texts import t
 from services.openai_client import ask_openai
 
 logger = logging.getLogger(__name__)
@@ -64,16 +71,10 @@ async def cmd_start_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     name = user.first_name or user.username or "друг"
 
+    lang = context.user_data.get("lang", "ru")
+
     await update.message.reply_text(
-        f"Привет, {name} 👋\n\n"
-        "Artbazar AI — помощник для предпринимателей.\n"
-        "Здесь нет прогнозов и советов.\n"
-        "Только спокойный разбор идей и рисков,\n"
-        "чтобы решения принимались без лишнего давления.\n\n"
-        "⚠️ Важно:\n"
-        "Это не прогноз и не гарантия результата.\n"
-        "Решение и ответственность остаются за тобой.\n\n"
-        "Продолжим?",
+        t(lang, "start_greeting", name=name),
         reply_markup=ReplyKeyboardMarkup(
             [[KeyboardButton(BTN_YES), KeyboardButton(BTN_NO)]],
             resize_keyboard=True,
@@ -81,7 +82,8 @@ async def cmd_start_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def on_yes(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Выбери раздел 👇", reply_markup=main_menu_keyboard())
+    lang = context.user_data.get("lang", "ru")
+    await update.message.reply_text(t(lang, "choose_section"), reply_markup=main_menu_keyboard())
 
 async def on_no(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Хорошо. Я рядом.", reply_markup=main_menu_keyboard())
@@ -92,20 +94,32 @@ async def on_no(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def on_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
-    insights = context.user_data.get("insights") or {}
 
-    scenario = insights.get("scenario", "—")
-    verdict = insights.get("verdict", "—")
-    risk = insights.get("risk", "—")
+    # Премиум-флаг: без БД, без FSM, просто UI (как ты и хотел)
+    is_premium = bool(context.user_data.get("is_premium", False))
+
+    lang = context.user_data.get("lang", "ru")
+    base_text = t(lang, "profile_premium") if is_premium else t(lang, "profile_free")
+
+    # Доп. блок под канал (Free/Premium — разный текст)
+    if is_premium:
+        channel_block = (
+            "\n\n📢 Новости и обновления ArtBazaar AI\n"
+            "Подписывайся на официальный канал, чтобы быть в курсе новых возможностей."
+        )
+    else:
+        channel_block = (
+            "\n\n📢 Новости и обновления ArtBazaar AI\n"
+            "Подписывайся на официальный канал — там коротко и по делу про новые фишки."
+        )
+
+    keyboard = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("🔔 Перейти в канал ArtBazaar AI", url="https://t.me/artba3ar")]]
+    )
 
     await update.message.reply_text(
-        "👤 Личный кабинет\n\n"
-        "Последний зафиксированный результат:\n"
-        f"• Сценарий: {scenario}\n"
-        f"• Вердикт: {verdict}\n"
-        f"• Риск: {risk}\n\n"
-        "Это ориентир, а не рекомендация; решение за пользователем.",
-        reply_markup=main_menu_keyboard(),
+        base_text + channel_block,
+        reply_markup=keyboard,
     )
 
 # =============================
@@ -114,12 +128,9 @@ async def on_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def on_business_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
+    lang = context.user_data.get("lang", "ru")
     await update.message.reply_text(
-        "📊 Бизнес-анализ\n\n"
-        "Здесь вы можете посмотреть на бизнес со стороны.\n"
-        "Не чтобы найти «правильный ответ»,\n"
-        "а чтобы прояснить риски, ограничения\n"
-        "и точки неопределённости.",
+        t(lang, "business_hub_intro"),
         reply_markup=business_hub_keyboard(),
     )
 
@@ -568,7 +579,7 @@ async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if comp == NS_COMPETITION_SOFT:
             competition = "низкая"
         elif comp == NS_COMPETITION_HARD:
-            competition = "высокая"
+            competition = "высокий"
         elif comp == NS_COMPETITION_UNKNOWN:
             competition = "неясно"
 
@@ -677,6 +688,17 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await premium_benefits(update, context)
         return
 
+    # Экспорт (Premium кабинет) — прокидываем в handlers/profile.py
+    if text == "📊 Скачать Excel":
+        from handlers.profile import on_export_excel
+        await on_export_excel(update, context)
+        return
+
+    if text == "📄 Скачать PDF":
+        from handlers.profile import on_export_pdf
+        await on_export_pdf(update, context)
+        return
+
     # Back (везде)
     if text == BTN_BACK:
         if context.user_data.get(PM_STATE_KEY) or context.user_data.get(GROWTH_KEY):
@@ -726,45 +748,13 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Фоллбек
-    await update.message.reply_text("Выбери раздел 👇", reply_markup=main_menu_keyboard())
+    lang = context.user_data.get("lang", "ru")
+    await update.message.reply_text(t(lang, "choose_section"), reply_markup=main_menu_keyboard())
 
 # =============================
 # REGISTER
 # =============================
 
 def register_handlers_user(app):
-    # импорт внутри функции — КАНОН
-    from handlers.profile import (
-        on_profile,
-        on_export_excel,
-        on_export_pdf,
-    )
-
-    # основной текстовый роутер
-    app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, text_router)
-    )
-
-    # 👤 Личный кабинет
-    app.add_handler(
-        MessageHandler(
-            filters.Regex(r"^👤 Личный кабинет$"),
-            on_profile
-        )
-    )
-
-    # 📊 Экспорт Excel
-    app.add_handler(
-        MessageHandler(
-            filters.Regex(r"^📊 Скачать Excel$"),
-            on_export_excel
-        )
-    )
-
-    # 📄 Экспорт PDF
-    app.add_handler(
-        MessageHandler(
-            filters.Regex(r"^📄 Скачать PDF$"),
-            on_export_pdf
-        )
-    )
+    # Один роутер = одна точка правды
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
