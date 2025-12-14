@@ -17,6 +17,8 @@ BTN_GROWTH = "🚀 Рост и продажи"
 BTN_ANALYSIS = "📦 Аналитика товара"
 BTN_NICHE = "🔎 Подбор ниши"
 
+BTN_PROFILE = "👤 Личный кабинет"
+
 BTN_PREMIUM = "❤️ Premium"
 BTN_PREMIUM_BENEFITS = "Что получу"
 
@@ -29,10 +31,12 @@ def main_menu_keyboard():
         [
             [KeyboardButton(BTN_BIZ)],
             [KeyboardButton(BTN_ANALYSIS), KeyboardButton(BTN_NICHE)],
+            [KeyboardButton(BTN_PROFILE)],
             [KeyboardButton(BTN_PREMIUM)],
         ],
         resize_keyboard=True,
     )
+
 
 def business_hub_keyboard():
     return ReplyKeyboardMarkup(
@@ -42,6 +46,7 @@ def business_hub_keyboard():
         ],
         resize_keyboard=True,
     )
+
 
 def growth_channels_keyboard():
     return ReplyKeyboardMarkup(
@@ -53,11 +58,13 @@ def growth_channels_keyboard():
         resize_keyboard=True,
     )
 
+
 def step_keyboard(options):
     return ReplyKeyboardMarkup(
         [[KeyboardButton(opt)] for opt in options] + [[KeyboardButton(BTN_BACK)]],
         resize_keyboard=True,
     )
+
 
 def premium_keyboard():
     return ReplyKeyboardMarkup(
