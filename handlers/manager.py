@@ -22,6 +22,8 @@ from database.db import get_user_role
 # ==================================================
 
 BTN_ACTIVATE_PREMIUM = "🟢 Активировать Premium"
+BTN_EXPORT_PDF = "📄 Скачать PDF"
+BTN_EXPORT_EXCEL = "📊 Скачать Excel"
 
 # ==================================================
 # FSM
@@ -39,6 +41,15 @@ def manager_keyboard():
         resize_keyboard=True,
     )
 
+def premium_profile_keyboard():
+    return ReplyKeyboardMarkup(
+        [
+            [KeyboardButton(BTN_EXPORT_PDF), KeyboardButton(BTN_EXPORT_EXCEL)],
+            [KeyboardButton("⬅️ Главное меню")],
+        ],
+        resize_keyboard=True,
+    )
+
 # ==================================================
 # DB helpers
 # ==================================================
@@ -53,7 +64,7 @@ def _get_user_by_username(username: str):
     try:
         cur = conn.cursor()
         cur.execute(
-            "SELECT telegram_id, username FROM users WHERE username = ?",
+            "SELECT telegram_id FROM users WHERE username = ?",
             (username,),
         )
         return cur.fetchone()
@@ -97,7 +108,7 @@ async def on_activate_premium(update: Update, context: ContextTypes.DEFAULT_TYPE
         "Отправь одной строкой:\n"
         "`@username дни`\n\n"
         "Пример:\n"
-        "`@test_user 30`",
+        "`@test_user 7`",
         parse_mode="Markdown",
         reply_markup=ReplyKeyboardRemove(),
     )
@@ -123,33 +134,50 @@ async def on_premium_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = parts[0].replace("@", "").strip()
     days = int(parts[1])
 
-    user_row = _get_user_by_username(username)
-    if not user_row:
+    row = _get_user_by_username(username)
+    if not row:
         await update.message.reply_text("❌ Пользователь не найден в базе.")
         return
 
-    telegram_id, _ = user_row
+    telegram_id = row[0]
     set_premium_by_telegram_id(telegram_id, days)
 
     context.user_data.pop(FSM_WAIT_PREMIUM_INPUT, None)
 
-    # 🔔 Тёплое уведомление пользователю
+    # ===============================
+    # 🔔 УВЕДОМЛЕНИЕ ПОЛЬЗОВАТЕЛЮ
+    # + АВТО-ВХОД В КАБИНЕТ
+    # ===============================
+
     try:
         await context.bot.send_message(
             chat_id=telegram_id,
             text=(
                 "🎉 *Premium активирован!*\n\n"
-                f"Срок: *{days} дней*\n\n"
-                "Теперь в личном кабинете доступны:\n"
-                "• история\n"
-                "• PDF / Excel экспорт\n\n"
-                "Спасибо, что с ArtBazaar AI ❤️"
+                f"⏳ Срок: *{days} дней*\n\n"
+                "Теперь доступны:\n"
+                "• история анализов\n"
+                "• экспорт в PDF и Excel\n\n"
+                "Я сразу открыл твой личный кабинет 👇"
             ),
             parse_mode="Markdown",
+        )
+
+        await context.bot.send_message(
+            chat_id=telegram_id,
+            text=(
+                "👤 *Личный кабинет*\n\n"
+                "Статус: ⭐ *Premium активен*\n\n"
+                "Здесь собраны твои результаты.\n"
+                "Ты можешь скачать отчёты в PDF или Excel."
+            ),
+            parse_mode="Markdown",
+            reply_markup=premium_profile_keyboard(),
         )
     except Exception:
         pass
 
+    # Ответ менеджеру
     await update.message.reply_text(
         f"✅ Premium активирован\n\n"
         f"👤 @{username}\n"
