@@ -231,7 +231,7 @@ def _build_premium_prompt(
 # ---------------------------------------------------------------------
 # Основная функция
 # ---------------------------------------------------------------------
-def generate_niche_recommendations(
+async def generate_niche_recommendations(
     user_id: int,
     season: SeasonType,
     business_format: BusinessFormatType,
@@ -249,7 +249,7 @@ def generate_niche_recommendations(
             season, business_format, budget, experience, audience, interests
         )
 
-    return ask_ai(prompt)
+    return await ask_ai(prompt)
 
 
 # ---------------------------------------------------------------------
