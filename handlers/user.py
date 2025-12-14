@@ -1,20 +1,87 @@
-str: """
-Короткая связка между сценариями. Без магии, без "я всё помню".
-"""
 
-_ensure_insights(context)
-ins = context.user_data.get(INSIGHTS_KEY, {})
-if not ins:
-    return ""
 
-last = ins.get("last_scenario")
-last_v = ins.get("last_verdict")
-if last and last_v:
-    return (
-        "Я опираюсь на то, что мы уже разобрали, чтобы не начинать с нуля.\n"
-        f"Прошлый ориентир: {last} → {last_v}.\n\n"
-    )
-return "Я опираюсь на то, что мы уже разобрали, чтобы не начинать с нуля.\n\n"
+
+
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram.ext import ContextTypes, MessageHandler, filters
+from typing import Optional
+
+# Константы
+INSIGHTS_KEY = "insights"
+PM_STATE_KEY = "pm_state"
+PM_STATE_REVENUE = "revenue"
+PM_STATE_EXPENSES = "expenses"
+GROWTH_KEY = "growth"
+TA_STATE_KEY = "ta_state"
+TA_STAGE = "stage"
+TA_PURPOSE = "purpose"
+TA_SEASON = "season"
+TA_COMP = "competition"
+TA_PRICE = "price"
+TA_RESOURCE = "resource"
+NS_STEP_KEY = "ns_step"
+PREMIUM_KEY = "premium"
+
+# Кнопки (должны быть определены где-то)
+BTN_YES = "Да"
+BTN_NO = "Нет"
+BTN_BIZ = "📊 Бизнес-анализ"
+BTN_ANALYSIS = "📦 Анализ товара"
+BTN_NICHE = "🔎 Подбор ниши"
+BTN_PROFILE = "👤 Профиль"
+BTN_PREMIUM = "❤️ Premium"
+BTN_PM = "💰 Прибыль и деньги"
+BTN_GROWTH = "🚀 Рост и продажи"
+BTN_BACK = "↩️ Назад"
+BTN_PREMIUM_BENEFITS = "Что получу?"
+GC_INST = "Instagram"
+GC_TG = "Telegram"
+GC_KASPI = "Kaspi"
+GC_WB = "Wildberries"
+GC_OZON = "Ozon"
+GC_OFFLINE = "Оффлайн"
+
+def clear_fsm(context):
+    """Очистка состояний FSM"""
+    keys_to_clear = [
+        PM_STATE_KEY, GROWTH_KEY, TA_STATE_KEY, 
+        NS_STEP_KEY, PREMIUM_KEY, "revenue", 
+        "product_stage", "product_purpose", "seasonality",
+        "competition", "price_reaction", "resource",
+        "goal", "format", "demand"
+    ]
+    for key in keys_to_clear:
+        context.user_data.pop(key, None)
+
+def _ensure_insights(context):
+    """Инициализация insights в user_data"""
+    if INSIGHTS_KEY not in context.user_data:
+        context.user_data[INSIGHTS_KEY] = {}
+
+async def ask_openai(prompt):
+    """Заглушка для запроса к OpenAI"""
+    # Здесь должна быть реальная реализация
+    return "Аналитический разбор будет здесь..."
+
+def insights_bridge_text(context):
+    """
+    Короткая связка между сценариями. Без магии, без "я всё помню".
+    """
+    _ensure_insights(context)
+    ins = context.user_data.get(INSIGHTS_KEY, {})
+    if not ins:
+        return ""
+    
+    last = ins.get("last_scenario")
+    last_v = ins.get("last_verdict")
+    if last and last_v:
+        return (
+            "Я опираюсь на то, что мы уже разобрали, чтобы не начинать с нуля.\n"
+            f"Прошлый ориентир: {last} → {last_v}.\n\n"
+        )
+    return "Я опираюсь на то, что мы уже разобрали, чтобы не начинать с нуля.\n\n"
+
+# Дальше идет остальной код...
 
 def save_insights(
     context: ContextTypes.DEFAULT_TYPE,
