@@ -18,7 +18,6 @@ from handlers.user import (
     cmd_start_user,
     register_handlers_user,
 )
-from handlers.profile import on_profile  # ✅ ДОБАВЛЕНО
 
 # MANAGER
 from handlers.manager import (
