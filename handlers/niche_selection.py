@@ -272,7 +272,7 @@ async def generate_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
         audience_text=flow["audience"],
     )
 
-    response = generate_niche_recommendations(
+    response = await generate_niche_recommendations(  # ✅ Исправлено здесь
         user_id=update.effective_user.id,
         season=internal["season"],
         business_format=internal["business_format"],
