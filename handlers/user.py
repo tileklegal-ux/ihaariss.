@@ -18,21 +18,35 @@ BTN_NICHE = "🔎 Подбор ниши"
 BTN_PROFILE = "👤 Личный кабинет"
 BTN_PREMIUM = "❤️ Premium"
 
-# Каналы продаж
-BTN_INST = "📸 Instagram"
-BTN_TG = "✈️ Telegram"
-BTN_KASPI = "💳 Kaspi"
-BTN_WB = "📦 Wildberries"
-BTN_OZON = "📦 Ozon"
-BTN_OFFLINE = "🏬 Офлайн"
-BTN_OTHER = "🔧 Другое"
+# Аналитика товара — кнопки FSM
+BTN_CTX_PRODUCT = "Конкретный товар"
+BTN_CTX_IDEA = "Идея / направление"
+BTN_CTX_RESEARCH = "Изучаю рынок"
 
-# Ниши
-BTN_ONLINE = "🌐 Онлайн"
-BTN_OFFLINE_N = "🏬 Офлайн"
-BTN_NO_STOCK = "📦 Без склада"
-BTN_SERVICE = "🛠 Услуги"
-BTN_FAST = "⚡ Быстрый старт"
+BTN_PURPOSE_PAIN = "Решает проблему"
+BTN_PURPOSE_CONVENIENCE = "Удобство"
+BTN_PURPOSE_EMOTION = "Эмоция"
+BTN_PURPOSE_UNCLEAR = "Не до конца понятно"
+
+BTN_SEASON_ALWAYS = "Почти всегда"
+BTN_SEASON_MONTHS = "В определённые месяцы"
+BTN_SEASON_WAVES = "Всплесками"
+BTN_SEASON_UNKNOWN = "Не знаю"
+
+BTN_COMP_LOW = "Почти нигде"
+BTN_COMP_MED = "Иногда встречается"
+BTN_COMP_HIGH = "Везде"
+BTN_COMP_UNKNOWN = "Не смотрел"
+
+BTN_PRICE_LOW = "Ниже рынка"
+BTN_PRICE_MED = "Как у других"
+BTN_PRICE_HIGH = "Выше рынка"
+BTN_PRICE_UNKNOWN = "Пока не знаю"
+
+BTN_RESOURCE_MONEY = "Деньги"
+BTN_RESOURCE_TIME = "Время"
+BTN_RESOURCE_SKILL = "Экспертиза"
+BTN_RESOURCE_MIN = "Минимальный ресурс"
 
 # =============================
 # КЛАВИАТУРЫ
@@ -60,28 +74,8 @@ def business_hub_keyboard():
         resize_keyboard=True,
     )
 
-def growth_channels_keyboard():
-    return ReplyKeyboardMarkup(
-        [
-            [KeyboardButton(BTN_INST), KeyboardButton(BTN_TG)],
-            [KeyboardButton(BTN_KASPI), KeyboardButton(BTN_WB)],
-            [KeyboardButton(BTN_OZON), KeyboardButton(BTN_OFFLINE)],
-            [KeyboardButton(BTN_OTHER)],
-            [KeyboardButton(BTN_BACK)],
-        ],
-        resize_keyboard=True,
-    )
-
-def niche_keyboard():
-    return ReplyKeyboardMarkup(
-        [
-            [KeyboardButton(BTN_ONLINE), KeyboardButton(BTN_OFFLINE_N)],
-            [KeyboardButton(BTN_NO_STOCK), KeyboardButton(BTN_SERVICE)],
-            [KeyboardButton(BTN_FAST)],
-            [KeyboardButton(BTN_BACK)],
-        ],
-        resize_keyboard=True,
-    )
+def kb(*rows):
+    return ReplyKeyboardMarkup([[KeyboardButton(b) for b in row] for row in rows] + [[KeyboardButton(BTN_BACK)]], resize_keyboard=True)
 
 # =============================
 # START
@@ -95,28 +89,22 @@ async def cmd_start_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"Привет, {name} 👋\n\n"
         "Ты в Artbazar AI — аналитическом помощнике для предпринимателей.\n\n"
-        "Я помогаю разложить бизнес-решения по полочкам и снизить неопределённость.\n\n"
+        "Я помогаю:\n"
+        "• разобраться в логике решений\n"
+        "• увидеть ограничения и риски\n"
+        "• выбрать следующий шаг без иллюзий\n\n"
         "⚠️ Важно:\n"
         "Любая аналитика — это ориентир, а не гарантия.\n"
         "Решения всегда остаются за тобой.\n\n"
         "Продолжим?",
-        reply_markup=ReplyKeyboardMarkup(
-            [[KeyboardButton(BTN_YES), KeyboardButton(BTN_NO)]],
-            resize_keyboard=True,
-        ),
+        reply_markup=ReplyKeyboardMarkup([[KeyboardButton(BTN_YES), KeyboardButton(BTN_NO)]], resize_keyboard=True),
     )
 
 async def on_yes(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Выбери, с чего начнём 👇",
-        reply_markup=main_menu_keyboard(),
-    )
+    await update.message.reply_text("Выбери, с чего начнём 👇", reply_markup=main_menu_keyboard())
 
 async def on_no(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Хорошо. Я рядом, когда понадобится.",
-        reply_markup=main_menu_keyboard(),
-    )
+    await update.message.reply_text("Хорошо. Я рядом.", reply_markup=main_menu_keyboard())
 
 # =============================
 # БИЗНЕС-АНАЛИЗ
@@ -126,168 +114,121 @@ async def on_business_analysis(update: Update, context: ContextTypes.DEFAULT_TYP
     await update.message.reply_text(
         "📊 Бизнес-анализ\n\n"
         "Здесь анализ — это логика и ограничения,\n"
-        "а не отчёты и графики.",
+        "а не отчёты и прогнозы.",
         reply_markup=business_hub_keyboard(),
     )
 
 async def on_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
-    await update.message.reply_text(
-        "Главное меню",
-        reply_markup=main_menu_keyboard(),
-    )
+    await update.message.reply_text("Главное меню", reply_markup=main_menu_keyboard())
 
 # =============================
-# FSM 💰 ПРИБЫЛЬ И ДЕНЬГИ
-# =============================
-
-async def pm_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.clear()
-    context.user_data["pm_state"] = "revenue"
-
-    await update.message.reply_text(
-        "💰 Прибыль и деньги\n\n"
-        "Разберём деньги без обещаний и прогнозов —\n"
-        "только реальность и ограничения.\n\n"
-        "Укажи выручку за месяц.\n"
-        "Сколько денег фактически пришло от клиентов.\n"
-        "Без ожиданий и планов — только факт.",
-        reply_markup=ReplyKeyboardMarkup(
-            [[KeyboardButton(BTN_BACK)]],
-            resize_keyboard=True,
-        ),
-    )
-
-async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.replace(" ", "")
-    if not text.isdigit():
-        await update.message.reply_text("Введи число, без букв.")
-        return
-
-    if context.user_data.get("pm_state") == "revenue":
-        context.user_data["revenue"] = int(text)
-        context.user_data["pm_state"] = "expenses"
-        await update.message.reply_text(
-            "Теперь расходы за этот же месяц.\n"
-            "Закупки, реклама, аренда, сервисы, комиссии.\n"
-            "Если сомневаешься — лучше завысить, чем забыть."
-        )
-        return
-
-    revenue = context.user_data["revenue"]
-    expenses = int(text)
-    profit = revenue - expenses
-    margin = (profit / revenue * 100) if revenue else 0
-    context.user_data.clear()
-
-    await update.message.reply_text(
-        f"📊 Итог за месяц:\n\n"
-        f"Прибыль: {profit}\n"
-        f"Маржа: {margin:.1f}%\n\n"
-        "Это не оценка бизнеса.\n"
-        "Это снимок текущего состояния.",
-        reply_markup=business_hub_keyboard(),
-    )
-
-# =============================
-# FSM 🚀 РОСТ И ПРОДАЖИ
-# =============================
-
-async def growth_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.clear()
-    context.user_data["growth"] = True
-
-    await update.message.reply_text(
-        "🚀 Рост и продажи\n\n"
-        "Рост здесь — не ускорение любой ценой,\n"
-        "а понимание, где он вообще возможен.\n\n"
-        "Откуда к вам сейчас чаще всего приходят клиенты?",
-        reply_markup=growth_channels_keyboard(),
-    )
-
-async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    channel = update.message.text
-    context.user_data.clear()
-
-    await update.message.reply_text(
-        f"📈 План роста:\n\n"
-        f"Основной канал: {channel}\n\n"
-        "Мы фиксируем точку контроля.\n"
-        "Следующий шаг — усилить этот канал\n"
-        "или снизить зависимость от него.",
-        reply_markup=business_hub_keyboard(),
-    )
-
-# =============================
-# 📦 АНАЛИТИКА ТОВАРА (ПРЕ-ЭКРАН)
+# FSM 📦 АНАЛИТИКА ТОВАРА
 # =============================
 
 async def ta_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+    context.user_data["ta_step"] = 1
+
     await update.message.reply_text(
         "📦 Аналитика товара\n\n"
-        "Этот сценарий помогает трезво посмотреть на конкретный товар.\n"
-        "Мы разберём спрос, сезонность и риски,\n"
-        "чтобы понять, стоит ли его тестировать сейчас.\n\n"
-        "Результат — ориентир для решения, а не прогноз.",
-        reply_markup=main_menu_keyboard(),
+        "Этот сценарий помогает трезво посмотреть на товар.\n"
+        "Без прогнозов и обещаний.\n\n"
+        "В каком контексте ты его рассматриваешь?",
+        reply_markup=kb(
+            [BTN_CTX_PRODUCT, BTN_CTX_IDEA],
+            [BTN_CTX_RESEARCH],
+        ),
     )
 
-# =============================
-# 🔎 ПОДБОР НИШИ (ПРЕ-ЭКРАН)
-# =============================
+async def ta_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    step = context.user_data.get("ta_step")
+    text = update.message.text
 
-async def ns_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.clear()
-    context.user_data["niche"] = True
+    if step == 1:
+        context.user_data["context"] = text
+        context.user_data["ta_step"] = 2
+        await update.message.reply_text(
+            "Зачем его обычно покупают?",
+            reply_markup=kb(
+                [BTN_PURPOSE_PAIN, BTN_PURPOSE_CONVENIENCE],
+                [BTN_PURPOSE_EMOTION, BTN_PURPOSE_UNCLEAR],
+            ),
+        )
+        return
 
-    await update.message.reply_text(
-        "🔎 Подбор ниши\n\n"
-        "Здесь мы не ищем «лучшую нишу».\n"
-        "Мы сужаем варианты и убираем заведомо слабые направления.\n\n"
-        "На выходе — рамки и риски, с которыми придётся работать.",
-        reply_markup=niche_keyboard(),
-    )
+    if step == 2:
+        context.user_data["purpose"] = text
+        context.user_data["ta_step"] = 3
+        await update.message.reply_text(
+            "Когда его покупают активнее?",
+            reply_markup=kb(
+                [BTN_SEASON_ALWAYS, BTN_SEASON_MONTHS],
+                [BTN_SEASON_WAVES, BTN_SEASON_UNKNOWN],
+            ),
+        )
+        return
 
-async def niche_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    choice = update.message.text
-    context.user_data.clear()
+    if step == 3:
+        context.user_data["season"] = text
+        context.user_data["ta_step"] = 4
+        await update.message.reply_text(
+            "Где ты уже видел этот товар?",
+            reply_markup=kb(
+                [BTN_COMP_LOW, BTN_COMP_MED],
+                [BTN_COMP_HIGH, BTN_COMP_UNKNOWN],
+            ),
+        )
+        return
 
-    await update.message.reply_text(
-        f"🎯 Формат: {choice}\n\n"
-        "Это не рекомендация.\n"
-        "Это ориентир для первого шага.",
-        reply_markup=main_menu_keyboard(),
-    )
+    if step == 4:
+        context.user_data["competition"] = text
+        context.user_data["ta_step"] = 5
+        await update.message.reply_text(
+            "Как ты видишь цену относительно рынка?",
+            reply_markup=kb(
+                [BTN_PRICE_LOW, BTN_PRICE_MED],
+                [BTN_PRICE_HIGH, BTN_PRICE_UNKNOWN],
+            ),
+        )
+        return
 
-# =============================
-# ПРОЧЕЕ
-# =============================
+    if step == 5:
+        context.user_data["price"] = text
+        context.user_data["ta_step"] = 6
+        await update.message.reply_text(
+            "Что у тебя есть для старта?",
+            reply_markup=kb(
+                [BTN_RESOURCE_MONEY, BTN_RESOURCE_TIME],
+                [BTN_RESOURCE_SKILL, BTN_RESOURCE_MIN],
+            ),
+        )
+        return
 
-async def on_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "👤 Личный кабинет\n\nИстория появится позже.",
-        reply_markup=main_menu_keyboard(),
-    )
+    if step == 6:
+        context.user_data["resource"] = text
 
-async def on_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "❤️ Premium\n\n"
-        "Больше глубины и спокойствия при решениях.\n\n"
-        "📩 Напиши: @Artbazar_marketing",
-        reply_markup=main_menu_keyboard(),
-    )
+        await update.message.reply_text(
+            "📊 Итог анализа\n\n"
+            "Вердикт — это ориентир, а не инструкция.\n"
+            "Я не выбираю за тебя — я показываю, где решение может быть хрупким.\n\n"
+            "Следующий шаг:\n"
+            "— протестировать малым объёмом\n"
+            "— уточнить реальный спрос\n\n"
+            "Осторожность здесь — не минус,\n"
+            "а способ не потерять время и деньги.",
+            reply_markup=main_menu_keyboard(),
+        )
+
+        context.user_data.clear()
 
 # =============================
 # ROUTER
 # =============================
 
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if context.user_data.get("pm_state"):
-        await pm_handler(update, context)
-    elif context.user_data.get("growth"):
-        await growth_handler(update, context)
-    elif context.user_data.get("niche"):
-        await niche_handler(update, context)
+    if context.user_data.get("ta_step"):
+        await ta_handler(update, context)
 
 # =============================
 # REGISTER
@@ -296,15 +237,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def register_handlers_user(app):
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_YES}$"), on_yes))
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_NO}$"), on_no))
-
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_BIZ}$"), on_business_analysis))
-    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_PM}$"), pm_start))
-    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_GROWTH}$"), growth_start))
-
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_ANALYSIS}$"), ta_start))
-    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_NICHE}$"), ns_start))
-    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_PROFILE}$"), on_profile))
-    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_PREMIUM}$"), on_premium))
-
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_BACK}$"), on_back))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
