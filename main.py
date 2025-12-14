@@ -11,7 +11,7 @@ from telegram.ext import (
 )
 
 from config import BOT_TOKEN
-from database.db import init_db, create_or_update_user, get_user_role
+from database.db import get_user_role
 
 # USER
 from handlers.user import (
@@ -19,15 +19,16 @@ from handlers.user import (
     register_handlers_user,
 )
 
+# MANAGER
+from handlers.manager import (
+    register_manager_handlers,
+    manager_keyboard,
+)
+
 # OWNER
 from handlers.owner import (
     owner_panel,
     register_owner_handlers,
-)
-
-# MANAGER
-from handlers.manager import (
-    register_manager_handlers,
 )
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -38,25 +39,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
 # ==================================================
-# MIDDLEWARE
-# ==================================================
-async def save_user_middleware(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user:
-        u = update.effective_user
-        create_or_update_user(
-            telegram_id=u.id,
-            username=u.username or "",
-            first_name=u.first_name or "",
-        )
-
-
-# ==================================================
-# /start — КАНОНИЧЕСКИЙ РОУТЕР
+# /start — КАНОНИЧЕСКИЙ РОУТЕР ПО РОЛЯМ
 # ==================================================
 async def cmd_start_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    role = get_user_role(update.effective_user.id)
+    user_id = update.effective_user.id
+    role = get_user_role(user_id)
 
     if role == "owner":
         await owner_panel(update, context)
@@ -64,42 +52,40 @@ async def cmd_start_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if role == "manager":
         await update.message.reply_text(
-            "🧑‍💼 Режим менеджера\n\n"
-            "Используй доступные команды."
+            "🧑‍💼 Панель менеджера",
+            reply_markup=manager_keyboard(),
         )
         return
 
+    # user по умолчанию
     await cmd_start_user(update, context)
-
 
 # ==================================================
 # MAIN
 # ==================================================
 def main():
-    init_db()
-
     application = (
         ApplicationBuilder()
         .token(BOT_TOKEN)
         .build()
     )
 
-    application.add_handler(
-        MessageHandler(filters.ALL & ~filters.COMMAND, save_user_middleware),
-        group=-1,
-    )
-
+    # /start — ВСЕГДА ПЕРВЫМ
     application.add_handler(
         CommandHandler("start", cmd_start_router),
         group=0,
     )
 
+    # OWNER
     register_owner_handlers(application)
+
+    # MANAGER
     register_manager_handlers(application)
+
+    # USER
     register_handlers_user(application)
 
     application.run_polling()
-
 
 if __name__ == "__main__":
     main()
