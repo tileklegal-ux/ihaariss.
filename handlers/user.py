@@ -96,6 +96,9 @@ BTN_NICHE = "🔎 Подбор ниши"
 BTN_PROFILE = "👤 Личный кабинет"
 BTN_PREMIUM = "❤️ Premium"
 
+# Premium (доп. кнопка)
+BTN_PREMIUM_BENEFITS = "📌 Что я получу конкретно"
+
 # =============================
 # КАНАЛЫ РОСТА
 # =============================
@@ -249,6 +252,16 @@ def step_keyboard(buttons):
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
 
+def premium_keyboard():
+    return ReplyKeyboardMarkup(
+        [
+            [KeyboardButton(BTN_PREMIUM_BENEFITS)],
+            [KeyboardButton(BTN_BACK)],
+        ],
+        resize_keyboard=True,
+    )
+
+
 # =============================
 # START
 # =============================
@@ -383,7 +396,6 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Маржа: {margin:.1f}%\n"
         )
 
-        # AI-комментарий (коротко, без “советов”)
         ai_prompt = (
             "Сделай короткий аналитический комментарий по месячной модели.\n"
             "Запрещено: обещать доход/рост, давать прямые советы.\n"
@@ -773,7 +785,7 @@ async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =============================
-# ❤️ PREMIUM (one-screen, через менеджера) + AI-сводка
+# ❤️ PREMIUM (ОБНОВЛЁН: коротко + цены + кнопка "что получу")
 # =============================
 
 async def premium_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -781,36 +793,34 @@ async def premium_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data[PREMIUM_KEY] = True
 
     await update.message.reply_text(
-        "❤️ Premium в Artbazar AI\n\n"
-        "Premium — это более глубокий разбор рисков и ограничений.\n"
-        "Без советов. Без прогнозов. Без обещаний результата.\n\n"
-        "Ты платишь не за ответы,\n"
-        "а за ясность мышления и снижение ошибок.\n\n"
-        "💳 Стоимость:\n\n"
-        "1 месяц:\n"
-        "• 🇰🇬 499 сом\n"
-        "• 🇰🇿 2 499 ₸\n"
-        "• 🇷🇺 449 ₽\n\n"
-        "6 месяцев:\n"
-        "• 🇰🇬 2 699 сом\n"
-        "• 🇰🇿 13 499 ₸\n"
-        "• 🇷🇺 2 399 ₽\n\n"
-        "12 месяцев:\n"
-        "• 🇰🇬 4 999 сом\n"
-        "• 🇰🇿 24 999 ₸\n"
-        "• 🇷🇺 4 499 ₽\n\n"
-        "📌 Важно:\n"
-        "Premium не принимает решения за тебя\n"
-        "и не гарантирует доход.\n\n"
-        "Он помогает видеть ограничения раньше,\n"
-        "чем они станут дорогими.\n\n"
-        "📩 Подключение Premium:\n"
+        "❤️ Premium\n\n"
+        "Быстро и по делу: цены + подключение.\n"
+        "Без воды, без обещаний.\n\n"
+        "💳 Стоимость:\n"
+        "1 месяц — 499 сом / 2 499 ₸ / 449 ₽\n"
+        "6 месяцев — 2 699 сом / 13 499 ₸ / 2 399 ₽\n"
+        "12 месяцев — 4 999 сом / 24 999 ₸ / 4 499 ₽\n\n"
+        "📩 Подключение через менеджера:\n"
         "@Artbazar_marketing",
-        reply_markup=ReplyKeyboardMarkup(
-            [[KeyboardButton(BTN_BACK)]],
-            resize_keyboard=True
-        ),
+        reply_markup=premium_keyboard(),
     )
+
+
+async def premium_benefits(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # 1 экран, 3 пункта — как ты запросил
+    await update.message.reply_text(
+        "📌 Что ты получишь в Premium\n\n"
+        "1) Глубже разбор рисков\n"
+        "— где идея ломается чаще всего\n\n"
+        "2) Связка сценариев\n"
+        "— ниша → товар → деньги → рост\n\n"
+        "3) Чётче проверки\n"
+        "— что проверить первым, чтобы не сжечь ресурс\n\n"
+        "Это не гарантии и не советы.\n"
+        "Это способ думать системнее.",
+        reply_markup=ReplyKeyboardMarkup([[KeyboardButton(BTN_BACK)]], resize_keyboard=True),
+    )
+
 
 # =============================
 # ПРОЧЕЕ
@@ -831,6 +841,11 @@ async def on_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text or ""
 
+    # Premium — второе окно
+    if text == BTN_PREMIUM_BENEFITS:
+        await premium_benefits(update, context)
+        return
+
     # глобальный Back (работает везде)
     if text == BTN_BACK:
         # если пользователь в бизнес-хаб сценариях — вернём в хаб
@@ -839,7 +854,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("📊 Бизнес-анализ", reply_markup=business_hub_keyboard())
             return
 
-        # если был внутри товар/ниша/premium — в главное меню
+        # иначе — в главное меню
         clear_fsm(context)
         await update.message.reply_text("Главное меню", reply_markup=main_menu_keyboard())
         return
@@ -862,7 +877,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if context.user_data.get(PREMIUM_KEY):
-        # Premium одноэкранный; Back обработан выше
+        # Premium одноэкранный; Back обработан выше; benefits ловим выше
         return
 
 
@@ -891,5 +906,5 @@ def register_handlers_user(app):
     # back (оставляем, но основной Back отрабатывает в router)
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_BACK}$"), on_back))
 
-    # общий роутер текста
+    # общий роутер текста (включая Premium benefits)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
