@@ -7,6 +7,7 @@ from handlers.user_keyboards import (
     main_menu_keyboard,
     BTN_BACK,
 )
+from handlers.user_texts import t
 
 from services.export_excel import build_excel_report
 from services.export_pdf import build_pdf_report
@@ -20,6 +21,7 @@ async def on_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data = context.user_data
     is_premium = user_data.get("is_premium", False)
     history = user_data.get("history", [])
+    lang = user_data.get("lang", "ru")
 
     # ------------------------------
     # 🆓 FREE
@@ -28,9 +30,7 @@ async def on_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         summary = get_results_summary(context)
 
         lines = [
-            "👤 Личный кабинет",
-            "",
-            "Статус: 🆓 Базовый доступ",
+            t(lang, "profile_free"),
             "",
             "Что уже сделано:",
         ]
@@ -63,9 +63,7 @@ async def on_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ⭐ PREMIUM
     # ------------------------------
     lines = [
-        "👤 Личный кабинет",
-        "",
-        "Статус: ⭐ Premium активен",
+        t(lang, "profile_premium"),
         "",
         "Последние результаты:",
     ]
@@ -74,13 +72,15 @@ async def on_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append("— нет данных для отчётов")
     else:
         for item in history[-5:]:
-            t = item.get("type", "—")
+            tpe = item.get("type", "—")
             d = item.get("date", "")
             s = item.get("summary", "")
-            lines.append(f"• {t} | {d} | {s}")
+            lines.append(f"• {tpe} | {d} | {s}")
 
-    lines.append("")
-    lines.append("Экспорт:")
+    lines.extend([
+        "",
+        "Экспорт:",
+    ])
 
     await update.message.reply_text(
         "\n".join(lines),
@@ -100,10 +100,11 @@ async def on_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def on_export_excel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     history = context.user_data.get("history", [])
+    lang = context.user_data.get("lang", "ru")
 
     if not history:
         await update.message.reply_text(
-            "Нет данных для Excel-отчёта.",
+            t(lang, "no_data_for_export"),
             reply_markup=main_menu_keyboard(),
         )
         return
@@ -113,7 +114,7 @@ async def on_export_excel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_document(
         document=stream,
         filename="artbazar_report.xlsx",
-        caption="📊 Excel-отчёт",
+        caption="📊 Excel",
         reply_markup=main_menu_keyboard(),
     )
 
@@ -124,10 +125,11 @@ async def on_export_excel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def on_export_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
     history = context.user_data.get("history", [])
+    lang = context.user_data.get("lang", "ru")
 
     if not history:
         await update.message.reply_text(
-            "Нет данных для PDF-отчёта.",
+            t(lang, "no_data_for_export"),
             reply_markup=main_menu_keyboard(),
         )
         return
@@ -137,6 +139,6 @@ async def on_export_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_document(
         document=stream,
         filename="artbazar_report.pdf",
-        caption="📄 PDF-отчёт",
+        caption="📄 PDF",
         reply_markup=main_menu_keyboard(),
     )
