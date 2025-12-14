@@ -1,18 +1,72 @@
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import ContextTypes, MessageHandler, filters
-from typing import Optional
+# -*- coding: utf-8 -*-
 
-# ... (все константы и вспомогательные функции как в предыдущем ответе) ...
+import logging
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram.ext import (
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
+
+from handlers.user_keyboards import (
+    main_menu_keyboard,
+    business_hub_keyboard,
+    growth_channels_keyboard,
+    step_keyboard,
+    premium_keyboard,
+    BTN_YES,
+    BTN_NO,
+    BTN_BACK,
+    BTN_PM,
+    BTN_GROWTH,
+    BTN_ANALYSIS,
+    BTN_NICHE,
+    BTN_PREMIUM,
+    BTN_PREMIUM_BENEFITS,
+    BTN_BIZ,
+)
+
+from handlers.user_helpers import (
+    clear_fsm,
+    save_insights,
+    insights_bridge_text,
+)
+
+from services.openai_client import ask_openai
+
+logger = logging.getLogger(__name__)
 
 # =============================
-# START
+# FSM KEYS
+# =============================
+
+PM_STATE_KEY = "pm_state"
+PM_STATE_REVENUE = "pm_revenue"
+PM_STATE_EXPENSES = "pm_expenses"
+
+GROWTH_KEY = "growth"
+
+TA_STATE_KEY = "ta_state"
+TA_STAGE = "stage"
+TA_PURPOSE = "purpose"
+TA_SEASON = "season"
+TA_COMP = "competition"
+TA_PRICE = "price"
+TA_RESOURCE = "resource"
+
+NS_STEP_KEY = "ns_step"
+
+PREMIUM_KEY = "premium"
+
+# =============================
+# START / ONBOARDING
 # =============================
 
 async def cmd_start_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
     user = update.effective_user
     name = user.first_name or user.username or "друг"
-    
+
     await update.message.reply_text(
         f"Привет, {name} 👋\n\n"
         "Artbazar AI — помощник для предпринимателей.\n"
@@ -42,7 +96,7 @@ async def on_no(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =============================
-# 📊 БИЗНЕС-АНАЛИЗ (хаб)
+# 📊 БИЗНЕС-АНАЛИЗ (ХАБ)
 # =============================
 
 async def on_business_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -57,16 +111,17 @@ async def on_business_analysis(update: Update, context: ContextTypes.DEFAULT_TYP
     )
 
 # =============================
-# 💰 ПРИБЫЛЬ И ДЕНЬГИ (FSM)
+# 💰 ПРИБЫЛЬ И ДЕНЬГИ
 # =============================
 
 async def pm_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
     context.user_data[PM_STATE_KEY] = PM_STATE_REVENUE
     bridge = insights_bridge_text(context)
-    
+
     await update.message.reply_text(
-        bridge + "💰 Прибыль и деньги\n\n"
+        bridge +
+        "💰 Прибыль и деньги\n\n"
         "Укажи выручку за выбранный месяц.\n"
         "Сколько денег фактически поступило от клиентов.\n"
         "Без прогнозов и ожиданий — только реальные поступления.\n"
@@ -77,98 +132,152 @@ async def pm_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ),
     )
 
-from pathlib import Path
-
-# Новый файл с исправленными заглушками вместо незавершённых функций
-handlers_user_code = '''\
 async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("⏳ Раздел в разработке.")
+    text_raw = update.message.text or ""
+    text = text_raw.replace(" ", "").replace(",", "").strip()
 
+    if not text.isdigit():
+        await update.message.reply_text("Введи число, без букв.")
+        return
+
+    state = context.user_data.get(PM_STATE_KEY)
+
+    if state == PM_STATE_REVENUE:
+        context.user_data["revenue"] = int(text)
+        context.user_data[PM_STATE_KEY] = PM_STATE_EXPENSES
+        await update.message.reply_text(
+            "Теперь укажи расходы за этот же месяц.\n"
+            "Закупки, реклама, аренда, сервисы, комиссии.\n"
+            "Если сомневаешься — лучше завысить, чем забыть.\n"
+            "Нужна общая сумма."
+        )
+        return
+
+    if state == PM_STATE_EXPENSES:
+        revenue = context.user_data.get("revenue", 0)
+        expenses = int(text)
+        profit = revenue - expenses
+        margin = (profit / revenue * 100) if revenue else 0
+
+        risk_level = "средний"
+        if revenue == 0 or margin < 0:
+            risk_level = "высокий"
+        elif margin >= 10:
+            risk_level = "низкий"
+
+        last_verdict = "Осторожно"
+        if margin >= 10:
+            last_verdict = "Можно смотреть"
+        if margin < 0:
+            last_verdict = "Высокий риск"
+
+        save_insights(
+            context,
+            last_scenario="💰 Деньги",
+            last_verdict=last_verdict,
+            risk_level=risk_level
+        )
+
+        clear_fsm(context)
+
+        base_text = (
+            "Итог за месяц:\n"
+            "Прибыль — разница между выручкой и расходами.\n"
+            "Маржа показывает, сколько остаётся с каждого рубля.\n"
+            "Это не оценка бизнеса, а снимок текущего состояния.\n\n"
+            f"Выручка: {revenue}\n"
+            f"Расходы: {expenses}\n"
+            f"Прибыль: {profit}\n"
+            f"Маржа: {margin:.1f}%\n"
+        )
+
+        ai_prompt = (
+            "Сделай короткий аналитический комментарий по месячной модели.\n"
+            "Запрещено: обещать доход/рост, давать прямые советы.\n"
+            "Нужно: 1) наблюдения 2) риски 3) варианты проверки.\n"
+            "В конце: это ориентир, а не рекомендация; решение за пользователем.\n\n"
+            f"Данные: выручка={revenue}, расходы={expenses}, прибыль={profit}, маржа%={margin:.1f}.\n"
+        )
+
+        ai_text = await ask_openai(ai_prompt)
+
+        await update.message.reply_text(
+            base_text + "\nКороткий разбор:\n" + ai_text,
+            reply_markup=business_hub_keyboard(),
+        )
 
 # =============================
-# 🚀 РОСТ И ПРОДАЖИ (FSM)
+# 🚀 РОСТ И ПРОДАЖИ
 # =============================
 
 async def growth_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("⏳ growth_start в разработке.")
+    clear_fsm(context)
+    context.user_data[GROWTH_KEY] = True
+    bridge = insights_bridge_text(context)
+
+    await update.message.reply_text(
+        bridge +
+        "🚀 Рост и продажи\n\n"
+        "Этот шаг нужен не для оценки эффективности.\n"
+        "Мы просто фиксируем, откуда клиенты приходят сейчас,\n"
+        "без ожиданий и планов на рост.\n\n"
+        "Выбери канал, который реально приводит клиентов сегодня,\n"
+        "даже если он кажется нестабильным или случайным.",
+        reply_markup=growth_channels_keyboard(),
+    )
 
 async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("⏳ growth_handler в разработке.")
+    channel = update.message.text or ""
 
+    save_insights(
+        context,
+        last_scenario="🚀 Рост",
+        last_verdict="Зафиксировали текущий канал"
+    )
+    clear_fsm(context)
 
-# =============================
-# 📦 АНАЛИТИКА ТОВАРА — FSM v1 (полный)
-# =============================
-
-async def ta_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("⏳ ta_start в разработке.")
-
-async def ta_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("⏳ ta_handler в разработке.")
-
-async def send_ta_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("⏳ send_ta_result в разработке.")
-
-
-# =============================
-# 🔎 ПОДБОР НИШИ — FSM v1 (полный)
-# =============================
-
-async def ns_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("⏳ ns_start в разработке.")
-
-async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("⏳ ns_handler в разработке.")
-
+    await update.message.reply_text(
+        "📈 Текущая картина:\n\n"
+        f"Источник клиентов: {channel}\n\n"
+        "Мы зафиксировали основной источник клиентов.\n"
+        "Это не оценка и не вывод о качестве канала,\n"
+        "а точка текущего состояния.\n\n"
+        "Рост — это нагрузка на систему.\n"
+        "Важно не ускоряться, а понимать пределы и узкие места.",
+        reply_markup=business_hub_keyboard(),
+    )
 
 # =============================
-# ❤️ PREMIUM (коротко + цены + кнопка "что получу")
-# =============================
-
-async def premium_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("⏳ premium_start в разработке.")
-
-async def premium_benefits(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("⏳ premium_benefits в разработке.")
-
-
-# =============================
-# ROUTER
+# ROUTER + REGISTER
 # =============================
 
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("⏳ text_router в разработке.")
-'''
+    text = update.message.text or ""
 
-# Сохраняем в файл
-file_path = Path("/mnt/data/handlers_user.py")
-file_path.write_text(handlers_user_code, encoding="utf-8")
-file_path.name
+    if text == BTN_PREMIUM_BENEFITS:
+        await premium_benefits(update, context)
+        return
 
-# =============================
-# REGISTER
-# =============================
+    if text == BTN_BACK:
+        clear_fsm(context)
+        await update.message.reply_text(
+            "Главное меню",
+            reply_markup=main_menu_keyboard()
+        )
+        return
+
+    if context.user_data.get(PM_STATE_KEY):
+        await pm_handler(update, context)
+        return
+
+    if context.user_data.get(GROWTH_KEY):
+        await growth_handler(update, context)
+        return
 
 def register_handlers_user(app):
-    # стартовые
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_YES}$"), on_yes))
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_NO}$"), on_no))
-    
-    # меню/хабы
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_BIZ}$"), on_business_analysis))
-    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_PROFILE}$"), on_profile))  # Теперь on_profile определена выше!
-    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_PREMIUM}$"), premium_start))
-    
-    # premium benefits
-    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_PREMIUM_BENEFITS}$"), premium_benefits))
-    
-    # бизнес-хаб сценарии
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_PM}$"), pm_start))
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_GROWTH}$"), growth_start))
-    
-    # product/niche
-    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_ANALYSIS}$"), ta_start))
-    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_NICHE}$"), ns_start))
-    
-    # общий роутер текста
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
