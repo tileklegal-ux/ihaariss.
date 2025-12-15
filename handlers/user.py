@@ -38,6 +38,9 @@ from handlers.user_helpers import (
 # ✅ ЕДИНСТВЕННЫЙ “владелец” личного кабинета и экспорта — handlers/profile.py
 from handlers.profile import on_profile, on_export_excel, on_export_pdf
 
+# ✅ ДОБАВЛЕНО: юридические документы
+from handlers.documents import on_documents
+
 from services.openai_client import ask_openai
 
 logger = logging.getLogger(__name__)
@@ -599,7 +602,6 @@ async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def premium_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
-    # тут только UI-экран, а премиум-флаг и так использует profile.py
     await update.message.reply_text(
         "❤️ Premium\n\n"
         "Быстро и по делу: цены + подключение.\n\n"
@@ -636,6 +638,11 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if text == BTN_NO:
         await on_no(update, context)
+        return
+
+    # ✅ ДОБАВЛЕНО: Документы и условия
+    if text in ("📄 Документы", "📄 Документы и условия", "ℹ️ О нас", "ℹ️ О проекте"):
+        await on_documents(update, context)
         return
 
     # Premium benefits
@@ -694,7 +701,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await ns_start(update, context)
         return
     if text == BTN_PROFILE:
-        # ✅ КЛЮЧЕВОЙ ФИКС: профиль берём только из handlers/profile.py
         await on_profile(update, context)
         return
     if text == BTN_PREMIUM:
@@ -710,5 +716,4 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =============================
 
 def register_handlers_user(app):
-    # Один роутер = одна точка правды
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
