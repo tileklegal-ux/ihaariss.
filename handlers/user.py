@@ -8,7 +8,11 @@ from telegram import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
 )
-
+from handlers.user_keyboards import (
+    BTN_AI_CHAT,
+    BTN_EXIT_CHAT,
+    ai_chat_keyboard,
+)
 from telegram.ext import ContextTypes, MessageHandler, filters
 
 from handlers.user_texts import t
@@ -648,7 +652,49 @@ async def premium_benefits(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text or ""
+# =============================
+    # ❌ RESET AI CHAT MODE
+    # =============================
+    if text in (
+        BTN_BACK,
+        BTN_BIZ,
+        BTN_ANALYSIS,
+        BTN_NICHE,
+        BTN_PROFILE,
+        BTN_PREMIUM,
+    ):
+        context.user_data.pop("ai_chat_mode", None)
+# ===============================
+# 🤖 AI CHAT MODE — TEXT INPUT
+# ===============================
+if context.user_data.get("ai_chat_mode"):
+    user_text = update.message.text.strip()
 
+    if not user_text:
+        return
+
+    # защита: команды и кнопки не пускаем в AI
+    if user_text.startswith("/"):
+        return
+
+    from services.openai_client import ask_ai_chat
+
+    await update.message.chat.send_action("typing")
+
+    try:
+        answer = await ask_ai_chat(
+            user_id=update.effective_user.id,
+            message=user_text,
+        )
+
+        await update.message.reply_text(answer)
+
+    except Exception:
+        await update.message.reply_text(
+            "⚠️ Не удалось получить ответ от AI. Попробуй ещё раз."
+        )
+
+    return        
     # YES/NO
     if text == BTN_YES:
         await on_yes(update, context)
@@ -666,7 +712,76 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == BTN_PREMIUM_BENEFITS:
         await premium_benefits(update, context)
         return
+# =============================
+# 💬 AI ЧАТ (Premium)
+# =============================
+if text == "💬 AI-чат":
+    if not context.user_data.get("is_premium"):
+        await update.message.reply_text(
+            "💬 AI-чат доступен только в Premium.\n\n"
+            "В Premium ты можешь задавать любые вопросы по бизнесу, стартапам и идеям.",
+            reply_markup=main_menu_keyboard(),
+        )
+        return
 
+    context.user_data["ai_chat_mode"] = True
+    await update.message.reply_text(
+        "💬 AI-чат активирован.\n\n"
+        "Напиши любой вопрос:\n"
+        "• про стартап\n"
+        "• про идею\n"
+        "• про рынок\n\n"
+        "Чтобы выйти — нажми «⬅️ Назад».",
+    )
+    return
+# =============================
+# 🧠 AI CHAT MESSAGE HANDLER
+# =============================
+
+if context.user_data.get("ai_chat_mode"):
+    # выход из AI-чата
+    if text == BTN_BACK:
+        context.user_data.pop("ai_chat_mode", None)
+        await update.message.reply_text(
+            "Ты вышел из AI-чата.",
+            reply_markup=main_menu_keyboard(),
+        )
+        return
+
+    # защита: пустые сообщения
+    if not text.strip():
+        return
+
+    # запрос к AI
+    try:
+        ai_prompt = (
+            "Ты — AI-ассистент ArtBazar.\n"
+            "Ты помогаешь предпринимателям и стартапам.\n"
+            "Отвечай кратко, по делу, без воды.\n"
+            "Не давай финансовых или юридических гарантий.\n"
+            "Всегда подчёркивай: это ориентир, а не рекомендация.\n\n"
+            f"Вопрос пользователя:\n{text}"
+        )
+
+        ai_answer = await ask_openai(ai_prompt)
+
+        await update.message.reply_text(
+            ai_answer,
+            reply_markup=ReplyKeyboardMarkup(
+                [[KeyboardButton(BTN_BACK)]],
+                resize_keyboard=True,
+            ),
+        )
+    except Exception:
+        await update.message.reply_text(
+            "Произошла ошибка. Попробуй задать вопрос ещё раз.",
+            reply_markup=ReplyKeyboardMarkup(
+                [[KeyboardButton(BTN_BACK)]],
+                resize_keyboard=True,
+            ),
+        )
+
+    return    
     # Экспорт (Premium кабинет)
     if text == "📊 Скачать Excel":
         await on_export_excel(update, context)
