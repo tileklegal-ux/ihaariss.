@@ -4,6 +4,8 @@ from telegram import (
     Update,
     ReplyKeyboardMarkup,
     KeyboardButton,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
 )
 from telegram.ext import ContextTypes
 
@@ -14,6 +16,15 @@ from handlers.user_texts import t
 from services.export_excel import build_excel_report
 from services.export_pdf import build_pdf_report
 from services.premium_checker import is_premium_user
+
+
+CHANNEL_URL = "https://t.me/artba3ar"
+
+
+def channel_button():
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton("🔔 Подписаться на канал ArtBazar.AI", url=CHANNEL_URL)]]
+    )
 
 
 # ==================================================
@@ -32,7 +43,7 @@ async def on_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not premium:
         summary = get_results_summary(context)
 
-        lines = [
+        text = [
             "👤 Личный кабинет",
             "",
             "Тариф: FREE",
@@ -41,37 +52,40 @@ async def on_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
 
         if not summary:
-            lines.append("— пока нет завершённых анализов")
+            text.append("— пока нет завершённых анализов")
         else:
             for k, v in summary.items():
-                lines.append(f"— {k}: {v}")
+                text.append(f"— {k}: {v}")
 
-        lines += [
+        text += [
             "",
             "В Premium доступно:",
             "• история результатов",
             "• экспорт PDF и Excel",
         ]
 
-        keyboard = ReplyKeyboardMarkup(
-            [
-                [KeyboardButton("❤️ Что даёт Premium")],
-                [KeyboardButton(BTN_DOCS)],
-                [KeyboardButton(BTN_BACK)],
-            ],
-            resize_keyboard=True,
+        await update.message.reply_text(
+            "\n".join(text),
+            reply_markup=channel_button(),
         )
 
         await update.message.reply_text(
-            "\n".join(lines),
-            reply_markup=keyboard,
+            " ",
+            reply_markup=ReplyKeyboardMarkup(
+                [
+                    [KeyboardButton("❤️ Что даёт Premium")],
+                    [KeyboardButton(BTN_DOCS)],
+                    [KeyboardButton(BTN_BACK)],
+                ],
+                resize_keyboard=True,
+            ),
         )
         return
 
     # ------------------------------
     # ⭐ PREMIUM
     # ------------------------------
-    lines = [
+    text = [
         "👤 Личный кабинет",
         "",
         "Тариф: PREMIUM ⭐",
@@ -80,32 +94,35 @@ async def on_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     if not history:
-        lines.append("— пока нет данных")
+        text.append("— пока нет данных")
     else:
         for item in history[-5:]:
-            lines.append(
+            text.append(
                 f"• {item.get('type','')} | {item.get('date','')} | {item.get('summary','')}"
             )
 
-    lines += [
+    text += [
         "",
         "📤 Экспорт отчётов:",
         "• PDF — краткий отчёт",
         "• Excel — таблица с данными",
     ]
 
-    keyboard = ReplyKeyboardMarkup(
-        [
-            [KeyboardButton("📄 Скачать PDF"), KeyboardButton("📊 Скачать Excel")],
-            [KeyboardButton(BTN_DOCS)],
-            [KeyboardButton(BTN_BACK)],
-        ],
-        resize_keyboard=True,
+    await update.message.reply_text(
+        "\n".join(text),
+        reply_markup=channel_button(),
     )
 
     await update.message.reply_text(
-        "\n".join(lines),
-        reply_markup=keyboard,
+        " ",
+        reply_markup=ReplyKeyboardMarkup(
+            [
+                [KeyboardButton("📄 Скачать PDF"), KeyboardButton("📊 Скачать Excel")],
+                [KeyboardButton(BTN_DOCS)],
+                [KeyboardButton(BTN_BACK)],
+            ],
+            resize_keyboard=True,
+        ),
     )
 
 
