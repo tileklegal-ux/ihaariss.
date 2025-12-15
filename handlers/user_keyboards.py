@@ -34,12 +34,13 @@ BTN_EXIT_CHAT = "❌ Выйти из AI-чата"
 def main_menu_keyboard():
     return ReplyKeyboardMarkup(
         [
-            [KeyboardButton(BTN_BIZ)],
+            # 🔝 Самое важное — наверху
+            [KeyboardButton(BTN_BIZ), KeyboardButton(BTN_AI_CHAT)],
+
             [KeyboardButton(BTN_ANALYSIS), KeyboardButton(BTN_NICHE)],
             [KeyboardButton(BTN_PROFILE)],
             [KeyboardButton(BTN_DOCS)],
             [KeyboardButton(BTN_PREMIUM)],
-            [KeyboardButton(BTN_AI_CHAT)],
         ],
         resize_keyboard=True,
     )
