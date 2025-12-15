@@ -18,12 +18,10 @@ BTN_ANALYSIS = "📦 Аналитика товара"
 BTN_NICHE = "🔎 Подбор ниши"
 
 BTN_PROFILE = "👤 Личный кабинет"
+BTN_DOCS = "📄 Документы и условия"
 
 BTN_PREMIUM = "❤️ Premium"
-BTN_PREMIUM_BENEFITS = "Что получу"
-
-# ✅ ДОБАВЛЕНО
-BTN_DOCS = "📄 Документы и условия"
+BTN_PREMIUM_BENEFITS = "❤️ Что даёт Premium"
 
 # =============================
 # KEYBOARDS
