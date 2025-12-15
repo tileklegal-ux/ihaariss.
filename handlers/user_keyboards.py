@@ -23,9 +23,8 @@ BTN_DOCS = "📄 Документы и условия"
 BTN_PREMIUM = "❤️ Premium"
 BTN_PREMIUM_BENEFITS = "❤️ Что даёт Premium"
 
-# 🤖 AI
+# 🔥 ВОТ ОН — КОТОРОГО НЕ ХВАТАЛО
 BTN_AI_CHAT = "🤖 AI чат"
-
 
 # =============================
 # KEYBOARDS
@@ -36,10 +35,10 @@ def main_menu_keyboard():
         [
             [KeyboardButton(BTN_BIZ)],
             [KeyboardButton(BTN_ANALYSIS), KeyboardButton(BTN_NICHE)],
-            [KeyboardButton(BTN_AI_CHAT)],
             [KeyboardButton(BTN_PROFILE)],
             [KeyboardButton(BTN_DOCS)],
             [KeyboardButton(BTN_PREMIUM)],
+            [KeyboardButton(BTN_AI_CHAT)],
         ],
         resize_keyboard=True,
     )
