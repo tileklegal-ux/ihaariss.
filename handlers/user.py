@@ -5,12 +5,10 @@ from telegram import (
     Update,
     ReplyKeyboardMarkup,
     KeyboardButton,
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
 )
 from telegram.ext import ContextTypes, MessageHandler, filters
-from handlers.user_texts import t
 
+from handlers.user_texts import t
 
 from handlers.user_keyboards import (
     main_menu_keyboard,
@@ -37,11 +35,12 @@ from handlers.user_helpers import (
     insights_bridge_text,
 )
 
+# ✅ ЕДИНСТВЕННЫЙ “владелец” личного кабинета и экспорта — handlers/profile.py
+from handlers.profile import on_profile, on_export_excel, on_export_pdf
 
 from services.openai_client import ask_openai
 
 logger = logging.getLogger(__name__)
-
 
 # =============================
 # FSM KEYS / STATES
@@ -63,8 +62,8 @@ TA_RESOURCE = "ta_resource"
 
 NS_STEP_KEY = "ns_step"
 
+# премиум-флаг, который читает profile.py
 PREMIUM_KEY = "is_premium"
-
 
 # =============================
 # START / ONBOARDING
@@ -94,40 +93,6 @@ async def on_yes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def on_no(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Хорошо. Я рядом.", reply_markup=main_menu_keyboard())
-
-# =============================
-# 👤 PROFILE
-# =============================
-
-async def on_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    clear_fsm(context)
-
-    # Премиум-флаг: без БД, без FSM, просто UI (как ты и хотел)
-    is_premium = bool(context.user_data.get("is_premium", False))
-
-    lang = context.user_data.get("lang", "ru")
-    base_text = t(lang, "profile_premium") if is_premium else t(lang, "profile_free")
-
-    # Доп. блок под канал (Free/Premium — разный текст)
-    if is_premium:
-        channel_block = (
-            "\n\n📢 Новости и обновления ArtBazaar AI\n"
-            "Подписывайся на официальный канал, чтобы быть в курсе новых возможностей."
-        )
-    else:
-        channel_block = (
-            "\n\n📢 Новости и обновления ArtBazaar AI\n"
-            "Подписывайся на официальный канал — там коротко и по делу про новые фишки."
-        )
-
-    keyboard = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("🔔 Перейти в канал ArtBazaar AI", url="https://t.me/artba3ar")]]
-    )
-
-    await update.message.reply_text(
-        base_text + channel_block,
-        reply_markup=keyboard,
-    )
 
 # =============================
 # 📊 БИЗНЕС-АНАЛИЗ (ХАБ)
@@ -224,7 +189,7 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         ai_prompt = (
             "Сделай короткий аналитический комментарий по месячной модели.\n"
-            "Запрещено: обещать доход/рост, давать прямые советы.\n"
+            "Запрещено: советы, обещания, прогнозы, директивы.\n"
             "Нужно: 1) наблюдения 2) риски 3) варианты проверки.\n"
             "В конце: это ориентир, а не рекомендация; решение за пользователем.\n\n"
             f"Данные: выручка={revenue}, расходы={expenses}, прибыль={profit}, маржа%={margin:.1f}.\n"
@@ -425,11 +390,8 @@ async def send_ta_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     base_text = (
         "Мы зафиксировали текущее состояние товара.\n"
-        "Вердикт — это ориентир, а не решение.\n"
-        "Он показывает, где стоит двигаться аккуратно.\n\n"
-        f"Вердикт: {verdict}\n\n"
-        "Даже аккуратный анализ не снимает риск.\n"
-        "Окончательное решение всегда остаётся за тобой.\n"
+        "Вердикт — это ориентир, а не решение.\n\n"
+        f"Вердикт: {verdict}\n"
     )
 
     ai_prompt = (
@@ -491,10 +453,6 @@ async def ns_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         bridge + "🔎 Подбор ниши\n\n"
-        "Этот сценарий помогает трезво посмотреть на направление,\n"
-        "а не найти «правильную нишу».\n"
-        "Здесь нет лучших ниш — есть только ниши\n"
-        "с разным уровнем неопределённости.\n\n"
         "Зачем ты сейчас смотришь ниши?",
         reply_markup=step_keyboard([NS_GOAL_START, NS_GOAL_SWITCH, NS_GOAL_RESEARCH]),
     )
@@ -610,12 +568,8 @@ async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         clear_fsm(context)
 
         base_text = (
-            "Этот результат не подбирает нишу за тебя.\n"
-            "Он показывает рамки и ограничения,\n"
-            "с которыми придётся работать.\n\n"
             f"Вердикт: {verdict}\n\n"
             "Вердикт — ориентир, а не рекомендация.\n"
-            "Решение и ответственность остаются у тебя.\n"
         )
 
         ai_prompt = (
@@ -645,12 +599,10 @@ async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def premium_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
-    context.user_data[PREMIUM_KEY] = True
-
+    # тут только UI-экран, а премиум-флаг и так использует profile.py
     await update.message.reply_text(
         "❤️ Premium\n\n"
-        "Быстро и по делу: цены + подключение.\n"
-        "Без воды, без обещаний.\n\n"
+        "Быстро и по делу: цены + подключение.\n\n"
         "💳 Стоимость:\n"
         "1 месяц — 499 сом / 2 499 ₸ / 449 ₽\n"
         "6 месяцев — 2 699 сом / 13 499 ₸ / 2 399 ₽\n"
@@ -664,13 +616,9 @@ async def premium_benefits(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📌 Что ты получишь в Premium\n\n"
         "1) Глубже разбор рисков\n"
-        "— где идея ломается чаще всего\n\n"
-        "2) Связка сценариев\n"
-        "— ниша → товар → деньги → рост\n\n"
-        "3) Чётче проверки\n"
-        "— что проверить первым, чтобы не сжечь ресурс\n\n"
-        "Это не гарантии и не советы.\n"
-        "Это способ думать системнее.\n\n"
+        "2) История результатов\n"
+        "3) Экспорт PDF / Excel\n\n"
+        "Это ориентир, а не рекомендация.\n"
         "Решение остаётся за тобой.",
         reply_markup=ReplyKeyboardMarkup([[KeyboardButton(BTN_BACK)]], resize_keyboard=True),
     )
@@ -695,14 +643,12 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await premium_benefits(update, context)
         return
 
-    # Экспорт (Premium кабинет) — прокидываем в handlers/profile.py
+    # Экспорт (Premium кабинет)
     if text == "📊 Скачать Excel":
-        from handlers.profile import on_export_excel
         await on_export_excel(update, context)
         return
 
     if text == "📄 Скачать PDF":
-        from handlers.profile import on_export_pdf
         await on_export_pdf(update, context)
         return
 
@@ -731,7 +677,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await ns_handler(update, context)
         return
 
-    # Главное меню (5 кнопок)
+    # Главное меню
     if text == BTN_BIZ:
         await on_business_analysis(update, context)
         return
@@ -748,6 +694,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await ns_start(update, context)
         return
     if text == BTN_PROFILE:
+        # ✅ КЛЮЧЕВОЙ ФИКС: профиль берём только из handlers/profile.py
         await on_profile(update, context)
         return
     if text == BTN_PREMIUM:
