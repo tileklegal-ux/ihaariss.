@@ -23,8 +23,9 @@ BTN_DOCS = "📄 Документы и условия"
 BTN_PREMIUM = "❤️ Premium"
 BTN_PREMIUM_BENEFITS = "❤️ Что даёт Premium"
 
-# 🔥 ВОТ ОН — КОТОРОГО НЕ ХВАТАЛО
+# AI CHAT
 BTN_AI_CHAT = "🤖 AI чат"
+BTN_EXIT_CHAT = "❌ Выйти из AI-чата"
 
 # =============================
 # KEYBOARDS
@@ -67,7 +68,8 @@ def growth_channels_keyboard():
 
 def step_keyboard(options):
     return ReplyKeyboardMarkup(
-        [[KeyboardButton(opt)] for opt in options] + [[KeyboardButton(BTN_BACK)]],
+        [[KeyboardButton(opt)] for opt in options]
+        + [[KeyboardButton(BTN_BACK)]],
         resize_keyboard=True,
     )
 
@@ -77,6 +79,15 @@ def premium_keyboard():
         [
             [KeyboardButton(BTN_PREMIUM_BENEFITS)],
             [KeyboardButton(BTN_BACK)],
+        ],
+        resize_keyboard=True,
+    )
+
+
+def ai_chat_keyboard():
+    return ReplyKeyboardMarkup(
+        [
+            [KeyboardButton(BTN_EXIT_CHAT)],
         ],
         resize_keyboard=True,
     )
