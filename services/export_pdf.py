@@ -1,43 +1,72 @@
 # -*- coding: utf-8 -*-
-from fpdf import FPDF
-from io import BytesIO
+
+"""
+PDF-отчёт для Artbazar AI
+
+Назначение:
+- читаемый документ
+- удобно отправить партнёру / сохранить
+- PDF = витрина + выводы
+"""
+
+import io
 from datetime import datetime
 
-
-class ReportPDF(FPDF):
-    def header(self):
-        self.set_font("Arial", "B", 14)
-        self.cell(0, 10, "Artbazar AI — Аналитический отчёт", ln=True)
-        self.ln(4)
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import mm
 
 
-def build_pdf_report(history: list) -> BytesIO:
+def build_pdf_report(history: list) -> io.BytesIO:
     """
-    Генерирует PDF-отчёт по истории пользователя.
-    Никакой FSM, только рендер.
+    history: список словарей из context.user_data["history"]
+    Берём последние результаты, делаем компактный отчёт.
     """
-    pdf = ReportPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=11)
+
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    y = height - 20 * mm
+
+    def draw_line(text: str):
+        nonlocal y
+        if y < 20 * mm:
+            c.showPage()
+            y = height - 20 * mm
+        c.drawString(20 * mm, y, text)
+        y -= 7 * mm
+
+    # Заголовок
+    c.setFont("Helvetica-Bold", 14)
+    draw_line("Artbazar AI — отчёт")
+    y -= 5 * mm
+
+    c.setFont("Helvetica", 10)
+    draw_line(f"Дата формирования: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    y -= 5 * mm
 
     if not history:
-        pdf.multi_cell(0, 8, "Нет данных для отчёта.")
+        draw_line("Нет данных для формирования отчёта.")
     else:
-        for item in history:
-            pdf.ln(3)
-            pdf.set_font("Arial", "B", 12)
-            pdf.cell(0, 8, f"{item.get('type', '').upper()} — {item.get('date', '')}", ln=True)
+        draw_line("Последние результаты:")
+        y -= 3 * mm
 
-            pdf.set_font("Arial", size=11)
-            summary = item.get("summary", "")
-            pdf.multi_cell(0, 7, f"Сводка: {summary}")
+        for item in history[-5:]:
+            draw_line(f"Тип: {item.get('type', '')}")
+            draw_line(f"Дата: {item.get('date', '')}")
+            draw_line(f"Итог: {item.get('summary', '')}")
+            risk = item.get("risk_level")
+            if risk:
+                draw_line(f"Уровень риска: {risk}")
+            y -= 3 * mm
 
-            ai_text = item.get("ai_comment", "")
-            if ai_text:
-                pdf.ln(1)
-                pdf.set_font("Arial", "I", 10)
-                pdf.multi_cell(0, 6, ai_text)
+    y -= 5 * mm
+    draw_line("Примечание:")
+    draw_line("Отчёт носит аналитический характер и не является рекомендацией.")
 
-    stream = BytesIO(pdf.output(dest="S").encode("latin-1"))
-    stream.seek(0)
-    return stream
+    c.showPage()
+    c.save()
+
+    buffer.seek(0)
+    return buffer
