@@ -12,12 +12,6 @@ from handlers.user_keyboards import (
     BTN_AI_CHAT,
     BTN_EXIT_CHAT,
     ai_chat_keyboard,
-)
-from telegram.ext import ContextTypes, MessageHandler, filters
-
-from handlers.user_texts import t
-
-from handlers.user_keyboards import (
     main_menu_keyboard,
     business_hub_keyboard,
     growth_channels_keyboard,
@@ -35,6 +29,14 @@ from handlers.user_keyboards import (
     BTN_PREMIUM,
     BTN_PREMIUM_BENEFITS,
 )
+from telegram.ext import (
+    ContextTypes,
+    MessageHandler,
+    filters,
+    Application,
+)
+
+from handlers.user_texts import t
 
 from handlers.user_helpers import (
     clear_fsm,
@@ -43,14 +45,12 @@ from handlers.user_helpers import (
 )
 
 # ✅ ЕДИНСТВЕННЫЙ “владелец” личного кабинета и экспорта — handlers/profile.py
-# Импорты профиля и экспорта оставлены, т.к. они вызываются из роутера
 from handlers.profile import on_profile, on_export_excel, on_export_pdf
 
 # ✅ ДОБАВЛЕНО: юридические документы
 from handlers.documents import on_documents
 
-# Клиент OpenAI
-from services.openai_client import ask_openai
+from services.openai_client import ask_openai, ask_ai_chat
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +76,7 @@ NS_STEP_KEY = "ns_step"
 
 # премиум-флаг, который читает profile.py
 PREMIUM_KEY = "is_premium"
+AI_CHAT_MODE_KEY = "ai_chat_mode" # Используем для изоляции режима
 
 # =============================
 # START / ONBOARDING
@@ -83,12 +84,12 @@ PREMIUM_KEY = "is_premium"
 
 async def cmd_start_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
+    context.user_data.pop(AI_CHAT_MODE_KEY, None) # Очищаем режим при старте
 
     if "lang" not in context.user_data:
         context.user_data["lang"] = "ru"
 
     user = update.effective_user
-    # Исправлена логика получения имени пользователя
     name = user.first_name or user.username or "друг"
     lang = context.user_data["lang"]
 
@@ -127,35 +128,28 @@ async def pm_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
     context.user_data[PM_STATE_KEY] = PM_STATE_REVENUE
     bridge = insights_bridge_text(context)
-    lang = context.user_data.get("lang", "ru") # Добавлено для потенциальной локализации
 
     await update.message.reply_text(
         bridge +
-        t(lang, "pm_start_text"), # Предполагается, что текст для PM_START вынесен в user_texts
+        "💰 Прибыль и деньги\n\n"
+        "Укажи выручку за выбранный месяц.\n"
+        "Сколько денег фактически поступило от клиентов.\n"
+        "Без прогнозов и ожиданий — только реальные поступления.\n"
+        "Период важен: считаем один конкретный месяц.",
         reply_markup=ReplyKeyboardMarkup([[KeyboardButton(BTN_BACK)]], resize_keyboard=True),
     )
 
 async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text_raw = (update.message.text or "")
-    # Очистка и удаление пробелов/запятых
     text = text_raw.replace(" ", "").replace(",", "").strip()
-    
-    # Синтаксическое исправление: `isdigit()` не работает с отрицательными числами, но
-    # для выручки/расходов нужны только положительные (или 0).
-    if not text.isdigit() and not (text.startswith("-") and text[1:].isdigit()):
-        await update.message.reply_text("Введи число, без букв и символов, кроме минуса.")
+    if not text.isdigit():
+        await update.message.reply_text("Введи число, без букв.")
         return
 
     state = context.user_data.get(PM_STATE_KEY)
 
     if state == PM_STATE_REVENUE:
-        try:
-            revenue = int(text)
-        except ValueError:
-            await update.message.reply_text("Пожалуйста, введи корректное число для выручки.")
-            return
-
-        context.user_data["revenue"] = revenue
+        context.user_data["revenue"] = int(text)
         context.user_data[PM_STATE_KEY] = PM_STATE_EXPENSES
         await update.message.reply_text(
             "Теперь укажи расходы за этот же месяц.\n"
@@ -166,19 +160,13 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if state == PM_STATE_EXPENSES:
-        try:
-            expenses = int(text)
-        except ValueError:
-            await update.message.reply_text("Пожалуйста, введи корректное число для расходов.")
-            return
-
         revenue = context.user_data.get("revenue", 0)
+        expenses = int(text)
         profit = revenue - expenses
-        # Исправление деления на ноль: теперь корректно обрабатывается случай revenue == 0
         margin = (profit / revenue * 100) if revenue else 0
 
         risk_level = "средний"
-        if revenue <= 0 and profit <= 0: # Скорректировано условие для "высокого" риска при нулевой/отрицательной выручке
+        if revenue == 0:
             risk_level = "высокий"
         else:
             if margin < 0:
@@ -200,7 +188,7 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             last_verdict=last_verdict,
             risk_level=risk_level
         )
-        clear_fsm(context) # Очистка FSM происходит после сохранения, как и должно быть
+        clear_fsm(context)
 
         base_text = (
             "Итог за месяц:\n"
@@ -225,7 +213,7 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             base_text + "\nКороткий разбор:\n" + ai_text,
-            reply_markup=business_hub_keyboard(), # Возврат в хаб, а не в главное меню
+            reply_markup=business_hub_keyboard(),
         )
 
 # =============================
@@ -234,8 +222,7 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def growth_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
-    # Присвоение значения для FSM
-    context.user_data[GROWTH_KEY] = True 
+    context.user_data[GROWTH_KEY] = True
     bridge = insights_bridge_text(context)
 
     await update.message.reply_text(
@@ -255,7 +242,7 @@ async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_insights(
         context,
         last_scenario="🚀 Рост",
-        last_verdict=f"Зафиксировали текущий канал: {channel}" # Добавление канала в вердикт
+        last_verdict="Зафиксировали текущий канал"
     )
     clear_fsm(context)
 
@@ -267,7 +254,7 @@ async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "а точка текущего состояния.\n\n"
         "Рост — это нагрузка на систему.\n"
         "Важно не ускоряться, а понимать пределы и узкие места.",
-        reply_markup=business_hub_keyboard(), # Возврат в хаб
+        reply_markup=business_hub_keyboard(),
     )
 
 # =============================
@@ -365,7 +352,6 @@ async def send_ta_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
     price = data.get("price_reaction", "")
     resource = data.get("resource", "")
 
-    # Логика определения типа спроса
     demand_type = "непонятно"
     if purpose == "Решает конкретную проблему":
         demand_type = "проблема"
@@ -374,28 +360,24 @@ async def send_ta_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif purpose == "Желание / эмоция":
         demand_type = "желание"
 
-    # Логика определения сезонности
     seasonality = "стабильно"
     if season in ("Сезонный", "Ситуативный"):
         seasonality = "сезонно"
     elif season == "Волнами":
         seasonality = "волнами"
 
-    # Логика определения конкуренции
     competition = "средняя"
     if comp == "Тихо":
         competition = "низкая"
     elif comp == "Перегрето":
         competition = "высокая"
 
-    # Логика определения уровня ресурса
     resource_level = "ограниченно"
     if resource in ("Деньги", "Время", "Экспертиза"):
         resource_level = "достаточно"
     if resource == "Минимальный ресурс":
         resource_level = "минимально"
 
-    # Логика вердикта и риска
     verdict = "Осторожно"
     risk_level = "средний"
 
@@ -405,17 +387,13 @@ async def send_ta_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if purpose in ("Желание / эмоция", "Не до конца понятно") and resource == "Минимальный ресурс":
         verdict = "Высокий риск"
         risk_level = "высокий"
-    
-    # Синтаксическое исправление: `resource_level` должен быть "достаточно"
     if competition == "низкая" and seasonality == "стабильно" and resource_level == "достаточно":
         risk_level = "низкий"
 
-    # Сохранение результатов
     save_insights(
         context,
         last_scenario="📦 Товар",
-        # Исправление: упрощенное условие для last_verdict
-        last_verdict=verdict, 
+        last_verdict=verdict if verdict != "Осторожно" else "Осторожно",
         risk_level=risk_level,
         demand_type=demand_type,
         seasonality=seasonality,
@@ -448,7 +426,7 @@ async def send_ta_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         base_text + "\nКороткий разбор:\n" + ai_text,
-        reply_markup=main_menu_keyboard(), # Возврат в главное меню
+        reply_markup=main_menu_keyboard(),
     )
 
 # =============================
@@ -545,7 +523,6 @@ async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if step == 6:
         context.user_data["resource"] = ans
 
-        # Сбор данных
         goal = context.user_data.get("goal", "")
         fmt = context.user_data.get("format", "")
         demand = context.user_data.get("demand", "")
@@ -556,15 +533,13 @@ async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         verdict = "Осторожно"
         risk_level = "средний"
 
-        # Логика вердикта и риска
         if demand == NS_DEMAND_PROBLEM and res != NS_RESOURCE_MIN:
             verdict = "Можно смотреть"
             risk_level = "средний"
         if demand == NS_DEMAND_EMOTION and res == NS_RESOURCE_MIN:
             verdict = "Высокий риск"
             risk_level = "высокий"
-        
-        # Установка вспомогательных флагов для insights
+
         demand_type = "непонятно"
         if demand == NS_DEMAND_PROBLEM:
             demand_type = "проблема"
@@ -579,13 +554,13 @@ async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif season == NS_SEASON_UNKNOWN:
             seasonality = "неясно"
 
-        competition_insight = "средняя"
+        competition = "средняя"
         if comp == NS_COMPETITION_SOFT:
-            competition_insight = "низкая"
+            competition = "низкая"
         elif comp == NS_COMPETITION_HARD:
-            competition_insight = "высокий"
+            competition = "высокий"
         elif comp == NS_COMPETITION_UNKNOWN:
-            competition_insight = "неясно"
+            competition = "неясно"
 
         resource_level = "ограниченно"
         if res in (NS_RESOURCE_MONEY, NS_RESOURCE_TIME, NS_RESOURCE_EXPERT):
@@ -593,7 +568,6 @@ async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if res == NS_RESOURCE_MIN:
             resource_level = "минимально"
 
-        # Сохранение
         save_insights(
             context,
             last_scenario="🔎 Ниша",
@@ -601,7 +575,7 @@ async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             risk_level=risk_level,
             demand_type=demand_type,
             seasonality=seasonality,
-            competition=competition_insight, # Исправлено: использование переменной competition_insight
+            competition=competition,
             resource=resource_level,
         )
 
@@ -642,7 +616,6 @@ async def premium_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     OFFER_URL = "https://www.notion.so/Premium-2c901cd07aa7808b85ddec9d8019e742?source=copy_link"
 
-    # Исправлены орфографические ошибки в числах (тире заменены на обычный минус)
     text = (
         "❤️ Premium\n\n"
         "Быстро и по делу: цены + подключение.\n\n"
@@ -660,11 +633,8 @@ async def premium_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await update.message.reply_text(text, reply_markup=offer_kb)
-    # Удален лишний пустой ответ, который просто менял клавиатуру.
-    # Клавиатура Premium должна быть прикреплена к предыдущему сообщению,
-    # но поскольку в оригинале она была во втором сообщении, сохраним эту структуру:
     await update.message.reply_text(
-        "Выбери действие:", # Более осмысленная фраза
+        " ",
         reply_markup=premium_keyboard(),
     )
 
@@ -677,18 +647,22 @@ async def premium_benefits(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "3) Экспорт PDF / Excel\n\n"
         "Это ориентир, а не рекомендация.\n"
         "Решение остаётся за тобой.",
-        # Клавиатура BTN_BACK должна возвращать в Premium Menu
-        reply_markup=premium_keyboard(), 
+        reply_markup=ReplyKeyboardMarkup([[KeyboardButton(BTN_BACK)]], resize_keyboard=True),
     )
 
 # =============================
-# 💬 AI ЧАТ ФУНКЦИИ
-# Вынесены, чтобы избежать конфликтов в роутере
+# 💬 AI ЧАТ (Premium) — НОВЫЕ ИЗОЛИРОВАННЫЕ ХЕНДЛЕРЫ
 # =============================
 
-async def ai_chat_enter(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Активация режима AI-чата."""
-    context.user_data["ai_chat_mode"] = True
+# Фильтр для проверки активного режима AI-чата
+def ai_chat_mode_active(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Проверяет, установлен ли флаг режима AI-чата в user_data."""
+    return context.user_data.get(AI_CHAT_MODE_KEY) is True
+
+async def on_ai_chat_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Хендлер для входа в AI-чат."""
+    clear_fsm(context)
+    context.user_data[AI_CHAT_MODE_KEY] = True
     await update.message.reply_text(
         "🤖 AI-чат активирован.\n\n"
         "Напиши любой вопрос.\n"
@@ -696,147 +670,55 @@ async def ai_chat_enter(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=ai_chat_keyboard(),
     )
 
-async def ai_chat_exit(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Выход из режима AI-чата."""
-    context.user_data.pop("ai_chat_mode", None)
+async def on_ai_chat_exit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Хендлер для выхода из AI-чата."""
+    # Очищаем флаг режима
+    context.user_data.pop(AI_CHAT_MODE_KEY, None)
+    # Очищаем FSM, если был активен (хотя по логике FSM чистится при входе в AI-чат, но это для надежности)
+    clear_fsm(context)
+
     await update.message.reply_text(
         "Ты вышел из AI-чата.",
         reply_markup=main_menu_keyboard(),
     )
 
-async def ai_chat_handler_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик сообщений внутри режима AI-чата (FSM-независимый)."""
-    text = update.message.text or ""
-
-    # Выход из AI-чата (если пришла кнопка)
-    if text in (BTN_BACK, BTN_EXIT_CHAT):
-        # В этом режиме кнопка должна быть обработана как выход
-        await ai_chat_exit(update, context)
-        return
-
-    user_text = text.strip()
+async def on_ai_chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Хендлер для обработки текстовых сообщений в режиме AI-чата."""
+    user_text = update.message.text.strip()
 
     if not user_text:
         return
 
-    # Защита: команды не пускаем
+    # защита: команды не пускаем
     if user_text.startswith("/"):
-        await update.message.reply_text(
-             "Пожалуйста, введи вопрос текстом. Команды в этом режиме игнорируются."
-        )
         return
-    
-    # Запрос к AI
-    # Импорт тут не нужен, так как он уже есть в начале файла
-    # from services.openai_client import ask_ai_chat 
 
     await update.message.chat.send_action("typing")
 
     try:
-        
-        ai_prompt = (
-            "Ты — AI-ассистент Essence Dev.\n"
-            "Ты помогаешь предпринимателям спокойно анализировать идеи, но не даешь советов и прогнозов.\n"
-            "Формат: 1) Наблюдения, 2) Риски, 3) Варианты проверки.\n"
-            "В конце: это ориентир, а не рекомендация; решение за пользователем.\n\n"
-            f"Текст пользователя:\n{user_text}"
+        # Используем ask_ai_chat для диалога с историей (предполагаем это intent)
+        answer = await ask_ai_chat(
+            user_id=update.effective_user.id,
+            message=user_text,
         )
-
-        answer = await ask_openai(ai_prompt)
-
         await update.message.reply_text(answer, reply_markup=ai_chat_keyboard())
 
-    except Exception as e:
-        logger.error(f"AI Chat Error: {e}")
+    except Exception:
         await update.message.reply_text(
             "⚠️ Не удалось получить ответ от AI. Попробуй ещё раз.",
             reply_markup=ai_chat_keyboard(),
         )
-    
-    return # Выход из роутера после обработки сообщения в AI-чате
 
 # =============================
-# ROUTER (ЕДИНЫЙ И СТРУКТУРИРОВАННЫЙ)
+# ROUTER (ЕДИНЫЙ) — ОБНОВЛЕН
 # =============================
 
+# Теперь этот роутер запускается ТОЛЬКО когда AI_CHAT_MODE_KEY НЕ АКТИВЕН.
+# Вся логика, связанная с AI, из него УДАЛЕНА.
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text or ""
-    
-    # ------------------------------------
-    # 0. СБРОС AI CHAT MODE (ОБРАБОТКА КНОПОК)
-    # ------------------------------------
-    # При нажатии на любую кнопку главного меню или FSM-сценария,
-    # мы сбрасываем флаг AI-чата, чтобы не сработала AI-логика.
-    
-    is_fsm_or_main_menu_button = text in (
-        BTN_BIZ, BTN_PM, BTN_GROWTH, BTN_ANALYSIS, BTN_NICHE, 
-        BTN_PROFILE, BTN_PREMIUM, BTN_PREMIUM_BENEFITS, BTN_AI_CHAT, "📊 Скачать Excel", "📄 Скачать PDF", "📄 Документы", "📄 Документы и условия", "ℹ️ О нас", "ℹ️ О проекте"
-    )
 
-    if context.user_data.get("ai_chat_mode") and (is_fsm_or_main_menu_button or text == BTN_BACK or text == BTN_EXIT_CHAT):
-        # Выход из режима AI-чата, если нажата любая другая кнопка
-        await ai_chat_exit(update, context)
-        # После выхода из чата, роутер продолжает работу, чтобы обработать нажатую кнопку.
-    elif not is_fsm_or_main_menu_button:
-        # Сброс флага, если он вдруг остался без причины
-        context.user_data.pop("ai_chat_mode", None)
-
-    # ------------------------------------
-    # 1. AI CHAT MODE (ПРИОРИТЕТ)
-    # ------------------------------------
-    if context.user_data.get("ai_chat_mode"):
-        # Если сообщение пришло в режиме AI-чата, передаем его специальному обработчику
-        # Обработчик ai_chat_handler_mode сам решает, как обрабатывать BTN_EXIT_CHAT/BTN_BACK
-        # но мы это уже сделали выше в блоке 0, поэтому тут только текстовый ввод.
-        
-        # Если мы вышли из чата в блоке 0 (например, нажав BTN_BACK), то ai_chat_mode уже False.
-        # Если же это чистый текстовый ввод, то ai_chat_mode True.
-        
-        if text not in (BTN_BACK, BTN_EXIT_CHAT):
-             # Это обычный текстовый ввод, обрабатываем его как чат
-             await ai_chat_handler_mode(update, context)
-             return # Выход, чтобы не сработала FSM-логика на введенный текст
-
-    # ------------------------------------
-    # 2. FSM (ПРИОРИТЕТ)
-    # ------------------------------------
-    # Обработка кнопки "Назад" внутри FSM
-    if text == BTN_BACK:
-        if context.user_data.get(PM_STATE_KEY) or context.user_data.get(GROWTH_KEY) or context.user_data.get(TA_STATE_KEY):
-            clear_fsm(context)
-            await update.message.reply_text("📊 Бизнес-анализ", reply_markup=business_hub_keyboard())
-            return
-        if context.user_data.get(NS_STEP_KEY):
-            clear_fsm(context)
-            await update.message.reply_text("Главное меню", reply_markup=main_menu_keyboard())
-            return
-        
-        # Общий BACK
-        await update.message.reply_text("Главное меню", reply_markup=main_menu_keyboard())
-        return
-
-    # Обработка FSM-ввода
-    if context.user_data.get(PM_STATE_KEY):
-        await pm_handler(update, context)
-        return
-    
-    if context.user_data.get(GROWTH_KEY):
-        await growth_handler(update, context)
-        return
-    
-    if context.user_data.get(TA_STATE_KEY):
-        await ta_handler(update, context)
-        return
-    
-    if context.user_data.get(NS_STEP_KEY):
-        await ns_handler(update, context)
-        return
-
-    # ------------------------------------
-    # 3. СПЕЦИАЛЬНЫЕ КОМАНДЫ И КНОПКИ (NON-FSM)
-    # ------------------------------------
-    
-    # Онбординг (YES/NO)
+    # YES/NO
     if text == BTN_YES:
         await on_yes(update, context)
         return
@@ -844,7 +726,51 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await on_no(update, context)
         return
 
-    # Главное меню (вход в FSM-сценарии или разделы)
+    # ✅ ДОБАВЛЕНО: Документы и условия
+    if text in ("📄 Документы", "📄 Документы и условия", "ℹ️ О нас", "ℹ️ О проекте"):
+        await on_documents(update, context)
+        return
+
+    # Premium benefits
+    if text == BTN_PREMIUM_BENEFITS:
+        await premium_benefits(update, context)
+        return
+
+    # Экспорт (Premium кабинет)
+    if text == "📊 Скачать Excel":
+        await on_export_excel(update, context)
+        return
+
+    if text == "📄 Скачать PDF":
+        await on_export_pdf(update, context)
+        return
+
+    # Back (везде)
+    if text == BTN_BACK:
+        if context.user_data.get(PM_STATE_KEY) or context.user_data.get(GROWTH_KEY):
+            clear_fsm(context)
+            await update.message.reply_text("📊 Бизнес-анализ", reply_markup=business_hub_keyboard())
+            return
+
+        clear_fsm(context)
+        await update.message.reply_text("Главное меню", reply_markup=main_menu_keyboard())
+        return
+
+    # FSM приоритеты
+    if context.user_data.get(PM_STATE_KEY):
+        await pm_handler(update, context)
+        return
+    if context.user_data.get(GROWTH_KEY):
+        await growth_handler(update, context)
+        return
+    if context.user_data.get(TA_STATE_KEY):
+        await ta_handler(update, context)
+        return
+    if context.user_data.get(NS_STEP_KEY):
+        await ns_handler(update, context)
+        return
+
+    # Главное меню
     if text == BTN_BIZ:
         await on_business_analysis(update, context)
         return
@@ -866,35 +792,8 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == BTN_PREMIUM:
         await premium_start(update, context)
         return
-    
-    # Вход в AI-чат
-    if text == BTN_AI_CHAT:
-        # Уже обработано в блоке 0, но на всякий случай, если код дойдет досюда
-        await ai_chat_enter(update, context)
-        return
-        
-    # Премиум-меню
-    if text == BTN_PREMIUM_BENEFITS:
-        await premium_benefits(update, context)
-        return
-    
-    # Экспорт (Premium кабинет)
-    if text == "📊 Скачать Excel":
-        await on_export_excel(update, context)
-        return
-    if text == "📄 Скачать PDF":
-        await on_export_pdf(update, context)
-        return
 
-    # ✅ ДОБАВЛЕНО: Документы и условия
-    if text in ("📄 Документы", "📄 Документы и условия", "ℹ️ О нас", "ℹ️ О проекте"):
-        await on_documents(update, context)
-        return
-
-    # ------------------------------------
-    # 4. ФОЛЛБЕК
-    # ------------------------------------
-    # ⚠️ ЭТОТ БЛОК ДОЛЖЕН БЫТЬ ВНУТРИ ASYNC DEF text_router
+    # Фоллбек
     lang = context.user_data.get("lang", "ru")
     await update.message.reply_text(t(lang, "choose_section"), reply_markup=main_menu_keyboard())
 
@@ -902,13 +801,45 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # REGISTER
 # =============================
 
-def register_handlers_user(app):
-    # Добавление обработчика для команды /start
-    from telegram.ext import CommandHandler
-    app.add_handler(CommandHandler("start", cmd_start_user))
-    
-    # Добавление основного обработчика текстовых сообщений
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
-    
-    # Обработчики для других типов сообщений (необязательно, но для полноты)
-    # app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO | filters.AUDIO | filters.LOCATION, some_fallback_handler))
+def register_handlers_user(app: Application):
+    # 1. Хендлер для выхода из AI-чата (самый высокий приоритет для кнопки выхода в режиме)
+    app.add_handler(
+        MessageHandler(
+            filters.TEXT
+            & filters.Regex(f"^{BTN_EXIT_CHAT}$|^[BTN_BACK]$")
+            & filters.User(ai_chat_mode_active),
+            on_ai_chat_exit,
+            group=-1, # Высокий приоритет
+        )
+    )
+
+    # 2. Хендлер для сообщений внутри AI-чата (высокий приоритет для ЛЮБОГО текста в режиме)
+    app.add_handler(
+        MessageHandler(
+            filters.TEXT
+            & filters.User(ai_chat_mode_active),
+            on_ai_chat_message,
+            group=-1, # Высокий приоритет
+        )
+    )
+
+    # 3. Хендлер для входа в AI-чат (как обычная кнопка меню)
+    app.add_handler(
+        MessageHandler(
+            filters.Regex(f"^{BTN_AI_CHAT}$")
+            & ~filters.User(ai_chat_mode_active),
+            on_ai_chat_start,
+            group=0,
+        )
+    )
+
+    # 4. Основной роутер (срабатывает только когда AI-чат НЕ АКТИВЕН)
+    app.add_handler(
+        MessageHandler(
+            filters.TEXT
+            & ~filters.COMMAND
+            & ~filters.User(ai_chat_mode_active), # Главный изоляционный фильтр
+            text_router,
+            group=0,
+        )
+    )
