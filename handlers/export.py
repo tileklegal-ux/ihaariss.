@@ -4,8 +4,8 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from generators.pdf_generator import generate_pdf
-from generators.excel_generator import generate_excel
+from services.pdf_generator import generate_simple_pdf
+from services.excel_generator import generate_excel
 
 
 # =====================================
