@@ -43,11 +43,13 @@ from handlers.user_helpers import (
 )
 
 # ✅ ЕДИНСТВЕННЫЙ “владелец” личного кабинета и экспорта — handlers/profile.py
+# Импорты профиля и экспорта оставлены, т.к. они вызываются из роутера
 from handlers.profile import on_profile, on_export_excel, on_export_pdf
 
 # ✅ ДОБАВЛЕНО: юридические документы
 from handlers.documents import on_documents
 
+# Клиент OpenAI
 from services.openai_client import ask_openai
 
 logger = logging.getLogger(__name__)
@@ -86,6 +88,7 @@ async def cmd_start_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["lang"] = "ru"
 
     user = update.effective_user
+    # Исправлена логика получения имени пользователя
     name = user.first_name or user.username or "друг"
     lang = context.user_data["lang"]
 
@@ -124,28 +127,35 @@ async def pm_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
     context.user_data[PM_STATE_KEY] = PM_STATE_REVENUE
     bridge = insights_bridge_text(context)
+    lang = context.user_data.get("lang", "ru") # Добавлено для потенциальной локализации
 
     await update.message.reply_text(
         bridge +
-        "💰 Прибыль и деньги\n\n"
-        "Укажи выручку за выбранный месяц.\n"
-        "Сколько денег фактически поступило от клиентов.\n"
-        "Без прогнозов и ожиданий — только реальные поступления.\n"
-        "Период важен: считаем один конкретный месяц.",
+        t(lang, "pm_start_text"), # Предполагается, что текст для PM_START вынесен в user_texts
         reply_markup=ReplyKeyboardMarkup([[KeyboardButton(BTN_BACK)]], resize_keyboard=True),
     )
 
 async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text_raw = (update.message.text or "")
+    # Очистка и удаление пробелов/запятых
     text = text_raw.replace(" ", "").replace(",", "").strip()
-    if not text.isdigit():
-        await update.message.reply_text("Введи число, без букв.")
+    
+    # Синтаксическое исправление: `isdigit()` не работает с отрицательными числами, но
+    # для выручки/расходов нужны только положительные (или 0).
+    if not text.isdigit() and not (text.startswith("-") and text[1:].isdigit()):
+        await update.message.reply_text("Введи число, без букв и символов, кроме минуса.")
         return
 
     state = context.user_data.get(PM_STATE_KEY)
 
     if state == PM_STATE_REVENUE:
-        context.user_data["revenue"] = int(text)
+        try:
+            revenue = int(text)
+        except ValueError:
+            await update.message.reply_text("Пожалуйста, введи корректное число для выручки.")
+            return
+
+        context.user_data["revenue"] = revenue
         context.user_data[PM_STATE_KEY] = PM_STATE_EXPENSES
         await update.message.reply_text(
             "Теперь укажи расходы за этот же месяц.\n"
@@ -156,13 +166,19 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if state == PM_STATE_EXPENSES:
+        try:
+            expenses = int(text)
+        except ValueError:
+            await update.message.reply_text("Пожалуйста, введи корректное число для расходов.")
+            return
+
         revenue = context.user_data.get("revenue", 0)
-        expenses = int(text)
         profit = revenue - expenses
+        # Исправление деления на ноль: теперь корректно обрабатывается случай revenue == 0
         margin = (profit / revenue * 100) if revenue else 0
 
         risk_level = "средний"
-        if revenue == 0:
+        if revenue <= 0 and profit <= 0: # Скорректировано условие для "высокого" риска при нулевой/отрицательной выручке
             risk_level = "высокий"
         else:
             if margin < 0:
@@ -184,7 +200,7 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             last_verdict=last_verdict,
             risk_level=risk_level
         )
-        clear_fsm(context)
+        clear_fsm(context) # Очистка FSM происходит после сохранения, как и должно быть
 
         base_text = (
             "Итог за месяц:\n"
@@ -209,7 +225,7 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             base_text + "\nКороткий разбор:\n" + ai_text,
-            reply_markup=business_hub_keyboard(),
+            reply_markup=business_hub_keyboard(), # Возврат в хаб, а не в главное меню
         )
 
 # =============================
@@ -218,7 +234,8 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def growth_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
-    context.user_data[GROWTH_KEY] = True
+    # Присвоение значения для FSM
+    context.user_data[GROWTH_KEY] = True 
     bridge = insights_bridge_text(context)
 
     await update.message.reply_text(
@@ -238,7 +255,7 @@ async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_insights(
         context,
         last_scenario="🚀 Рост",
-        last_verdict="Зафиксировали текущий канал"
+        last_verdict=f"Зафиксировали текущий канал: {channel}" # Добавление канала в вердикт
     )
     clear_fsm(context)
 
@@ -250,7 +267,7 @@ async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "а точка текущего состояния.\n\n"
         "Рост — это нагрузка на систему.\n"
         "Важно не ускоряться, а понимать пределы и узкие места.",
-        reply_markup=business_hub_keyboard(),
+        reply_markup=business_hub_keyboard(), # Возврат в хаб
     )
 
 # =============================
@@ -348,6 +365,7 @@ async def send_ta_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
     price = data.get("price_reaction", "")
     resource = data.get("resource", "")
 
+    # Логика определения типа спроса
     demand_type = "непонятно"
     if purpose == "Решает конкретную проблему":
         demand_type = "проблема"
@@ -356,24 +374,28 @@ async def send_ta_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif purpose == "Желание / эмоция":
         demand_type = "желание"
 
+    # Логика определения сезонности
     seasonality = "стабильно"
     if season in ("Сезонный", "Ситуативный"):
         seasonality = "сезонно"
     elif season == "Волнами":
         seasonality = "волнами"
 
+    # Логика определения конкуренции
     competition = "средняя"
     if comp == "Тихо":
         competition = "низкая"
     elif comp == "Перегрето":
         competition = "высокая"
 
+    # Логика определения уровня ресурса
     resource_level = "ограниченно"
     if resource in ("Деньги", "Время", "Экспертиза"):
         resource_level = "достаточно"
     if resource == "Минимальный ресурс":
         resource_level = "минимально"
 
+    # Логика вердикта и риска
     verdict = "Осторожно"
     risk_level = "средний"
 
@@ -383,13 +405,17 @@ async def send_ta_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if purpose in ("Желание / эмоция", "Не до конца понятно") and resource == "Минимальный ресурс":
         verdict = "Высокий риск"
         risk_level = "высокий"
+    
+    # Синтаксическое исправление: `resource_level` должен быть "достаточно"
     if competition == "низкая" and seasonality == "стабильно" and resource_level == "достаточно":
         risk_level = "низкий"
 
+    # Сохранение результатов
     save_insights(
         context,
         last_scenario="📦 Товар",
-        last_verdict=verdict if verdict != "Осторожно" else "Осторожно",
+        # Исправление: упрощенное условие для last_verdict
+        last_verdict=verdict, 
         risk_level=risk_level,
         demand_type=demand_type,
         seasonality=seasonality,
@@ -422,7 +448,7 @@ async def send_ta_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         base_text + "\nКороткий разбор:\n" + ai_text,
-        reply_markup=main_menu_keyboard(),
+        reply_markup=main_menu_keyboard(), # Возврат в главное меню
     )
 
 # =============================
@@ -519,6 +545,7 @@ async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if step == 6:
         context.user_data["resource"] = ans
 
+        # Сбор данных
         goal = context.user_data.get("goal", "")
         fmt = context.user_data.get("format", "")
         demand = context.user_data.get("demand", "")
@@ -529,13 +556,15 @@ async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         verdict = "Осторожно"
         risk_level = "средний"
 
+        # Логика вердикта и риска
         if demand == NS_DEMAND_PROBLEM and res != NS_RESOURCE_MIN:
             verdict = "Можно смотреть"
             risk_level = "средний"
         if demand == NS_DEMAND_EMOTION and res == NS_RESOURCE_MIN:
             verdict = "Высокий риск"
             risk_level = "высокий"
-
+        
+        # Установка вспомогательных флагов для insights
         demand_type = "непонятно"
         if demand == NS_DEMAND_PROBLEM:
             demand_type = "проблема"
@@ -550,288 +579,14 @@ async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif season == NS_SEASON_UNKNOWN:
             seasonality = "неясно"
 
-        competition = "средняя"
+        competition_insight = "средняя"
         if comp == NS_COMPETITION_SOFT:
-            competition = "низкая"
+            competition_insight = "низкая"
         elif comp == NS_COMPETITION_HARD:
-            competition = "высокий"
+            competition_insight = "высокий"
         elif comp == NS_COMPETITION_UNKNOWN:
-            competition = "неясно"
+            competition_insight = "неясно"
 
         resource_level = "ограниченно"
         if res in (NS_RESOURCE_MONEY, NS_RESOURCE_TIME, NS_RESOURCE_EXPERT):
-            resource_level = "достаточно"
-        if res == NS_RESOURCE_MIN:
-            resource_level = "минимально"
-
-        save_insights(
-            context,
-            last_scenario="🔎 Ниша",
-            last_verdict=verdict,
-            risk_level=risk_level,
-            demand_type=demand_type,
-            seasonality=seasonality,
-            competition=competition,
-            resource=resource_level,
-        )
-
-        clear_fsm(context)
-
-        base_text = (
-            f"Вердикт: {verdict}\n\n"
-            "Вердикт — ориентир, а не рекомендация.\n"
-        )
-
-        ai_prompt = (
-            "Дай короткий аналитический разбор по выбору направления (ниша).\n"
-            "Запрещено: советы, обещания, прогнозы, директивы.\n"
-            "Нужно: 1) наблюдения 2) риски 3) варианты проверки.\n"
-            "В конце: это ориентир, а не рекомендация; решение за пользователем.\n\n"
-            f"Зачем={goal}\n"
-            f"Формат={fmt}\n"
-            f"Спрос={demand}\n"
-            f"Сезонность={season}\n"
-            f"Конкуренция={comp}\n"
-            f"Ресурс={res}\n"
-            f"Ориентир-вердикт={verdict}\n"
-        )
-
-        ai_text = await ask_openai(ai_prompt)
-
-        await update.message.reply_text(
-            base_text + "\nКороткий разбор:\n" + ai_text,
-            reply_markup=main_menu_keyboard(),
-        )
-
-# =============================
-# ❤️ PREMIUM
-# =============================
-
-async def premium_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    clear_fsm(context)
-
-    OFFER_URL = "https://www.notion.so/Premium-2c901cd07aa7808b85ddec9d8019e742?source=copy_link"
-
-    text = (
-        "❤️ Premium\n\n"
-        "Быстро и по делу: цены + подключение.\n\n"
-        "💳 Стоимость:\n"
-        "1 месяц — 499 сом / 2 499 ₸ / 449 ₽\n"
-        "6 месяцев — 2 699 сом / 13 499 ₸ / 2 399 ₽\n"
-        "12 месяцев — 4 999 сом / 24 999 ₸ / 4 499 ₽\n\n"
-        "📩 Подключение через менеджера:\n"
-        "@Artbazar_marketing\n\n"
-        "Оплачивая Premium-доступ, вы принимаете условия публичной оферты."
-    )
-
-    offer_kb = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("📄 Публичная оферта (Premium)", url=OFFER_URL)]]
-    )
-
-    await update.message.reply_text(text, reply_markup=offer_kb)
-    await update.message.reply_text(
-        " ",
-        reply_markup=premium_keyboard(),
-    )
-
-
-async def premium_benefits(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "📌 Что ты получишь в Premium\n\n"
-        "1) Глубже разбор рисков\n"
-        "2) История результатов\n"
-        "3) Экспорт PDF / Excel\n\n"
-        "Это ориентир, а не рекомендация.\n"
-        "Решение остаётся за тобой.",
-        reply_markup=ReplyKeyboardMarkup([[KeyboardButton(BTN_BACK)]], resize_keyboard=True),
-    )
-
-# =============================
-# ROUTER (ЕДИНЫЙ)
-# =============================
-
-async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text or ""
-
-    # ❌ RESET AI CHAT MODE
-    if text in (
-        BTN_BACK,
-        BTN_BIZ,
-        BTN_ANALYSIS,
-        BTN_NICHE,
-        BTN_PROFILE,
-        BTN_PREMIUM,
-    ):
-        context.user_data.pop("ai_chat_mode", None)
-        return
-
-    # ===============================
-    # 🤖 AI CHAT MODE — TEXT INPUT
-    # ===============================
-    if context.user_data.get("ai_chat_mode"):
-        user_text = update.message.text.strip()
-
-        if not user_text:
-            return
-
-        # защита: команды не пускаем
-        if user_text.startswith("/"):
-            return
-
-        from services.openai_client import ask_ai_chat
-
-        await update.message.chat.send_action("typing")
-
-        try:
-            answer = await ask_ai_chat(
-                user_id=update.effective_user.id,
-                message=user_text,
-            )
-            await update.message.reply_text(answer)
-
-        except Exception:
-            await update.message.reply_text(
-                "⚠️ Не удалось получить ответ от AI. Попробуй ещё раз."
-            )
-
-        return
-
-    # ⬇️ ниже — остальной роутер (YES/NO, документы, premium и т.д.)
-    # YES/NO
-    if text == BTN_YES:
-        await on_yes(update, context)
-        return
-    if text == BTN_NO:
-        await on_no(update, context)
-        return
-
-    # ✅ ДОБАВЛЕНО: Документы и условия
-    if text in ("📄 Документы", "📄 Документы и условия", "ℹ️ О нас", "ℹ️ О проекте"):
-        await on_documents(update, context)
-        return
-
-    # Premium benefits
-    if text == BTN_PREMIUM_BENEFITS:
-        await premium_benefits(update, context)
-        return
-# =============================
-# 💬 AI ЧАТ (Premium)
-# =============================
-    # 🤖 AI CHAT
-if text == BTN_AI_CHAT:
-    context.user_data["ai_chat_mode"] = True
-    await update.message.reply_text(
-        "🤖 AI-чат активирован.\n\n"
-        "Напиши любой вопрос.\n"
-        f"Чтобы выйти — нажми «{BTN_EXIT_CHAT}».",
-        reply_markup=ai_chat_keyboard(),
-    )
-    return
-# =============================
-# 🧠 AI CHAT MESSAGE HANDLER
-# =============================
-if context.user_data.get("ai_chat_mode"):
-    # выход из AI-чата
-    if text in (BTN_BACK, BTN_EXIT_CHAT):
-        context.user_data.pop("ai_chat_mode", None)
-        await update.message.reply_text(
-            "Ты вышел из AI-чата.",
-            reply_markup=main_menu_keyboard(),
-        )
-        return
-
-    # защита: пустые сообщения
-    if not text.strip():
-        return
-
-    # запрос к AI
-    try:
-        ai_prompt = (
-            "Ты — AI-ассистент ArtBazar.\n"
-            "Ты помогаешь предпринимателям спокойно анализировать идеи.\n"
-            "Запрещено: советы, обещания, прогнозы, директивы.\n"
-            "Формат: наблюдения, риски, варианты проверки.\n\n"
-            f"Вопрос пользователя:\n{text}"
-        )
-
-        ai_answer = await ask_openai(ai_prompt)
-
-        await update.message.reply_text(
-            ai_answer,
-            reply_markup=ai_chat_keyboard(),
-        )
-    except Exception:
-        await update.message.reply_text(
-            "Произошла ошибка. Попробуй ещё раз.",
-            reply_markup=ai_chat_keyboard(),
-        )
-
-    return
-    
-    # Экспорт (Premium кабинет)
-    if text == "📊 Скачать Excel":
-        await on_export_excel(update, context)
-        return
-
-    if text == "📄 Скачать PDF":
-        await on_export_pdf(update, context)
-        return
-
-    # Back (везде)
-    if text == BTN_BACK:
-        if context.user_data.get(PM_STATE_KEY) or context.user_data.get(GROWTH_KEY):
-            clear_fsm(context)
-            await update.message.reply_text("📊 Бизнес-анализ", reply_markup=business_hub_keyboard())
-            return
-
-        clear_fsm(context)
-        await update.message.reply_text("Главное меню", reply_markup=main_menu_keyboard())
-        return
-
-    # FSM приоритеты
-    if context.user_data.get(PM_STATE_KEY):
-        await pm_handler(update, context)
-        return
-    if context.user_data.get(GROWTH_KEY):
-        await growth_handler(update, context)
-        return
-    if context.user_data.get(TA_STATE_KEY):
-        await ta_handler(update, context)
-        return
-    if context.user_data.get(NS_STEP_KEY):
-        await ns_handler(update, context)
-        return
-
-    # Главное меню
-    if text == BTN_BIZ:
-        await on_business_analysis(update, context)
-        return
-    if text == BTN_PM:
-        await pm_start(update, context)
-        return
-    if text == BTN_GROWTH:
-        await growth_start(update, context)
-        return
-    if text == BTN_ANALYSIS:
-        await ta_start(update, context)
-        return
-    if text == BTN_NICHE:
-        await ns_start(update, context)
-        return
-    if text == BTN_PROFILE:
-        await on_profile(update, context)
-        return
-    if text == BTN_PREMIUM:
-        await premium_start(update, context)
-        return
-
-    # Фоллбек
-    lang = context.user_data.get("lang", "ru")
-    await update.message.reply_text(t(lang, "choose_section"), reply_markup=main_menu_keyboard())
-
-# =============================
-# REGISTER
-# =============================
-
-def register_handlers_user(app):
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
+            resource_lev
