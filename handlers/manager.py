@@ -15,7 +15,8 @@ from telegram.ext import (
     filters,
 )
 
-from database.db import get_user_role
+# 📌 ИСПРАВЛЕНИЕ: Импортируем централизованные функции из database.db
+from database.db import get_user_role, get_user_by_username 
 
 # ==================================================
 # BUTTONS
@@ -52,22 +53,13 @@ def premium_profile_keyboard():
 # DB helpers
 # ==================================================
 
+# 📌 УДАЛЕНО: Убрали дублирующие функции базы данных _db_path и _get_user_by_username
+# Теперь они вызываются из database.db
+
 def _db_path() -> str:
+    # Используем os.path.join для корректного пути
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base_dir, "database", "artbazar.db")
-
-
-def _get_user_by_username(username: str):
-    conn = sqlite3.connect(_db_path())
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT telegram_id FROM users WHERE username = ?",
-            (username,),
-        )
-        return cur.fetchone()
-    finally:
-        conn.close()
 
 
 def set_premium_by_telegram_id(telegram_id: int, days: int):
@@ -96,6 +88,7 @@ def set_premium_by_telegram_id(telegram_id: int, days: int):
 # ==================================================
 
 async def on_activate_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Убедимся, что это менеджер
     if get_user_role(update.effective_user.id) != "manager":
         return
 
@@ -113,9 +106,11 @@ async def on_activate_premium(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def on_premium_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Убедимся, что это менеджер
     if get_user_role(update.effective_user.id) != "manager":
         return
 
+    # Проверяем, ожидает ли бот ввод Premium
     if not context.user_data.get(FSM_WAIT_PREMIUM_INPUT):
         return
 
@@ -124,6 +119,9 @@ async def on_premium_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ❌ Неверный формат
     if len(parts) != 2 or not parts[0].startswith("@") or not parts[1].isdigit():
+        # 📌 ИСПРАВЛЕНИЕ: Сбрасываем FSM при ошибке формата и возвращаем меню
+        context.user_data.pop(FSM_WAIT_PREMIUM_INPUT, None) 
+        
         await update.message.reply_text(
             "❌ Неверный формат.\n\n"
             "Используй:\n"
@@ -138,10 +136,14 @@ async def on_premium_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = parts[0].replace("@", "").strip()
     days = int(parts[1])
 
-    row = _get_user_by_username(username)
+    # 📌 ИСПРАВЛЕНИЕ: Используем регистронезависимую функцию из database.db
+    user_data = get_user_by_username(username)
 
     # ❌ Пользователь не найден
-    if not row:
+    if not user_data:
+        # 📌 ИСПРАВЛЕНИЕ: Сбрасываем FSM при ошибке поиска и возвращаем меню
+        context.user_data.pop(FSM_WAIT_PREMIUM_INPUT, None)
+        
         await update.message.reply_text(
             "❌ Пользователь не найден в базе.\n\n"
             "Убедись, что пользователь:\n"
@@ -152,7 +154,7 @@ async def on_premium_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    telegram_id = row[0]
+    telegram_id = user_data["telegram_id"] # Берем ID из возвращенного словаря
     set_premium_by_telegram_id(telegram_id, days)
 
     # ✅ УСПЕХ — только тут чистим FSM
@@ -187,7 +189,7 @@ async def on_premium_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
 
-    # Ответ менеджеру
+    # Ответ менеджеру (Остается на клавиатуре менеджера)
     await update.message.reply_text(
         f"✅ Premium активирован\n\n"
         f"👤 @{username}\n"
