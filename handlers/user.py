@@ -12,7 +12,7 @@ from telegram.ext import (
     ContextTypes,
     MessageHandler,
     filters,
-    Application, # <--- Обязательный импорт для register_handlers_user
+    Application,  # <--- Обязательный импорт для register_handlers_user
 )
 
 from handlers.user_keyboards import (
@@ -53,6 +53,9 @@ from handlers.documents import on_documents
 
 from services.openai_client import ask_openai
 
+# ✅ ДОБАВЛЕНО РАНЕЕ (и теперь ИСПОЛЬЗУЕМ): роль пользователя
+from database.db import get_user_role
+
 logger = logging.getLogger(__name__)
 
 # =============================
@@ -77,7 +80,7 @@ NS_STEP_KEY = "ns_step"
 
 # премиум-флаг, который читает profile.py
 PREMIUM_KEY = "is_premium"
-AI_CHAT_MODE_KEY = "ai_chat_mode" # Используем для изоляции режима
+AI_CHAT_MODE_KEY = "ai_chat_mode"  # Используем для изоляции режима
 
 # =============================
 # START / ONBOARDING
@@ -85,7 +88,7 @@ AI_CHAT_MODE_KEY = "ai_chat_mode" # Используем для изоляции
 
 async def cmd_start_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
-    context.user_data.pop(AI_CHAT_MODE_KEY, None) # Очищаем режим при старте
+    context.user_data.pop(AI_CHAT_MODE_KEY, None)  # Очищаем режим при старте
 
     if "lang" not in context.user_data:
         context.user_data["lang"] = "ru"
@@ -705,6 +708,16 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if text.startswith("/"):
+        return
+
+    # ==================================================
+    # ✅ КРИТИЧЕСКИЙ ФИКС:
+    # user.py НЕ ДОЛЖЕН обрабатывать owner/manager сообщения.
+    # Иначе после owner.py (group=1..2) снова сработает user.py (group=4)
+    # и перерисует клавиатуру на пользовательскую.
+    # ==================================================
+    role = get_user_role(update.effective_user.id)
+    if role in ("owner", "manager"):
         return
 
     if context.user_data.get(AI_CHAT_MODE_KEY) is True:
