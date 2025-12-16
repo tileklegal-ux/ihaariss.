@@ -8,6 +8,13 @@ from telegram import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
 )
+from telegram.ext import (
+    ContextTypes,
+    MessageHandler,
+    filters,
+    Application, # <--- Обязательный импорт для register_handlers_user
+)
+
 from handlers.user_keyboards import (
     BTN_AI_CHAT,
     BTN_EXIT_CHAT,
@@ -28,12 +35,6 @@ from handlers.user_keyboards import (
     BTN_PROFILE,
     BTN_PREMIUM,
     BTN_PREMIUM_BENEFITS,
-)
-from telegram.ext import (
-    ContextTypes,
-    MessageHandler,
-    filters,
-    Application,
 )
 
 from handlers.user_texts import t
@@ -654,9 +655,9 @@ async def premium_benefits(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # 💬 AI ЧАТ (Premium) — НОВЫЕ ИЗОЛИРОВАННЫЕ ХЕНДЛЕРЫ
 # =============================
 
-# Фильтр для проверки активного режима AI-чата
 def ai_chat_mode_active(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     """Проверяет, установлен ли флаг режима AI-чата в user_data."""
+    # Никакого await вне async def
     return context.user_data.get(AI_CHAT_MODE_KEY) is True
 
 async def on_ai_chat_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -696,7 +697,7 @@ async def on_ai_chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.message.chat.send_action("typing")
 
     try:
-        # Используем ask_ai_chat для диалога с историей (предполагаем это intent)
+        # Используем ask_ai_chat для диалога с историей
         answer = await ask_ai_chat(
             user_id=update.effective_user.id,
             message=user_text,
@@ -714,7 +715,6 @@ async def on_ai_chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
 # =============================
 
 # Теперь этот роутер запускается ТОЛЬКО когда AI_CHAT_MODE_KEY НЕ АКТИВЕН.
-# Вся логика, связанная с AI, из него УДАЛЕНА.
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text or ""
 
@@ -747,8 +747,9 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Back (везде)
     if text == BTN_BACK:
-        if context.user_data.get(PM_STATE_KEY) or context.user_data.get(GROWTH_KEY):
+        if context.user_data.get(PM_STATE_KEY) or context.user_data.get(GROWTH_KEY) or context.user_data.get(TA_STATE_KEY) or context.user_data.get(NS_STEP_KEY):
             clear_fsm(context)
+            # Возврат в хаб, если был активен любой FSM бизнес-анализа
             await update.message.reply_text("📊 Бизнес-анализ", reply_markup=business_hub_keyboard())
             return
 
@@ -770,7 +771,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await ns_handler(update, context)
         return
 
-    # Главное меню
+    # Главное меню (кнопки)
     if text == BTN_BIZ:
         await on_business_analysis(update, context)
         return
@@ -793,7 +794,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await premium_start(update, context)
         return
 
-    # Фоллбек
+    # Фоллбек (отвечает только если нет активных FSM и текст не совпал с кнопкой)
     lang = context.user_data.get("lang", "ru")
     await update.message.reply_text(t(lang, "choose_section"), reply_markup=main_menu_keyboard())
 
@@ -802,11 +803,15 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =============================
 
 def register_handlers_user(app: Application):
-    # 1. Хендлер для выхода из AI-чата (самый высокий приоритет для кнопки выхода в режиме)
+    """
+    Регистрирует все хендлеры пользователя.
+    Приоритет: AI-Выход (-1) > AI-Сообщение (-1) > AI-Вход (0) > Основной Роутер (0)
+    """
+    # 1. Хендлер для выхода из AI-чата (самый высокий приоритет для кнопки выхода)
     app.add_handler(
         MessageHandler(
             filters.TEXT
-            & filters.Regex(f"^{BTN_EXIT_CHAT}$|^[BTN_BACK]$")
+            & filters.Regex(f"^{BTN_EXIT_CHAT}$") # Скорректировано: реагируем только на кнопку выхода
             & filters.User(ai_chat_mode_active),
             on_ai_chat_exit,
             group=-1, # Высокий приоритет
@@ -817,6 +822,7 @@ def register_handlers_user(app: Application):
     app.add_handler(
         MessageHandler(
             filters.TEXT
+            & ~filters.COMMAND
             & filters.User(ai_chat_mode_active),
             on_ai_chat_message,
             group=-1, # Высокий приоритет
