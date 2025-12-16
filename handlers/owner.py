@@ -5,6 +5,7 @@ from telegram.ext import (
     ContextTypes,
     MessageHandler,
     filters,
+    StopPropagation,  # <--- ДОБАВЛЕН ИМПОРТ
 )
 
 from database.db import (
@@ -199,6 +200,9 @@ async def exit_owner(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Выход из панели владельца",
         reply_markup=main_menu_keyboard(),
     )
+    
+    # 📌 ФИКС: Остановка Propagation, чтобы апдейт не попал в group=4 (text_router)
+    raise StopPropagation  
 
 # ==================================================
 # REGISTER
