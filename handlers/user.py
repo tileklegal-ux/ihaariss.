@@ -687,7 +687,7 @@ if not is_user_premium(update.effective_user.id):
 
 await update.message.chat.send_action("typing")
 
-    try:
+try:
         answer = await ask_openai(user_text)
         await update.message.reply_text(answer, reply_markup=ai_chat_keyboard())
     except Exception:
