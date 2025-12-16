@@ -14,19 +14,17 @@ from database.db import (
     get_user_role,
 )
 
-from handlers.user_keyboards import main_menu_keyboard # <--- Оставим импорт для примера
+from handlers.user_keyboards import main_menu_keyboard
 
 # ==================================================
 # OWNER KEYBOARDS
 # ==================================================
 
-# 📌 ФИКС: Изменение текста кнопки для соответствия логике:
-# Теперь эта кнопка вызывает open_owner_menu, т.е. возвращает в главный раздел панели
 OWNER_MENU = ReplyKeyboardMarkup(
     [
         ["➕ Добавить менеджера", "➖ Удалить менеджера"],
         ["📊 Статистика"],
-        ["⬅️ Главный раздел"], # <--- ИЗМЕНЕН ТЕКСТ КНОПКИ
+        ["⬅️ Выйти в главное меню"], 
     ],
     resize_keyboard=True,
 )
@@ -39,15 +37,44 @@ OWNER_START_KB = ReplyKeyboardMarkup(
 # ==================================================
 # TEXTS
 # ==================================================
-# ... (Остальной текст без изменений) ...
 
+OWNER_START_TEXT = (
+    "Привет, босс 👋\n\n"
+    "Смотрим на Artbazar AI спокойно и стратегически.\n\n"
+    "Проект сейчас в рабочем MVP-состоянии.\n"
+    "Ниже — вектор движения, не план задач.\n\n"
+    "🎯 Фокус Artbazar AI:\n\n"
+    "1️⃣ Монетизация\n"
+    "— самостоятельная покупка Premium\n"
+    "— подписки и автопродление\n"
+    "— локальные платежи (Kaspi и др.)\n\n"
+    "2️⃣ Масштабирование\n"
+    "— Artbazar AI как бренд\n"
+    "— SaaS / B2B-версия\n"
+    "— white-label для партнёров\n\n"
+    "3️⃣ Аналитика\n"
+    "— персональные AI-разборы\n"
+    "— оценка рисков\n\n"
+    "Это не срочно.\n"
+    "Это направление."
+)
 
 # ==================================================
 # OWNER ENTRY
 # ==================================================
 
 async def owner_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-# ... (функция без изменений) ...
+    context.user_data.pop("ai_chat_mode", None)
+    context.user_data.pop("pm_state", None)
+    context.user_data.pop("ta_state", None)
+    context.user_data.pop("ns_step", None)
+    context.user_data.pop("growth", None)
+    context.user_data.pop("owner_mode", None)
+
+    await update.message.reply_text(
+        OWNER_START_TEXT,
+        reply_markup=OWNER_START_KB,
+    )
 
 # ==================================================
 # OWNER MAIN MENU
@@ -68,45 +95,114 @@ async def open_owner_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "👑 Панель владельца",
         reply_markup=OWNER_MENU,
     )
-    # 📌 ФИКС: Возврат, чтобы предотвратить попадание в group=4 (text_router)
     return
-
 
 # ==================================================
 # FSM STARTERS
 # ==================================================
-# ... (функции без изменений) ...
+
+async def start_add_manager(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if get_user_role(update.effective_user.id) != "owner":
+        return
+
+    context.user_data["owner_mode"] = "add_manager"
+    await update.message.reply_text(
+        "Отправь username или telegram_id пользователя"
+    )
+
+
+async def start_remove_manager(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if get_user_role(update.effective_user.id) != "owner":
+        return
+
+    context.user_data["owner_mode"] = "remove_manager"
+    await update.message.reply_text(
+        "Отправь username или telegram_id пользователя"
+    )
 
 # ==================================================
 # STATS
 # ==================================================
-# ... (функции без изменений) ...
+
+async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if get_user_role(update.effective_user.id) != "owner":
+        return
+
+    stats = get_stats()
+    total = stats.get("user", 0) + stats.get("manager", 0) + stats.get("owner", 0)
+
+    text = (
+        "📊 Статистика проекта\n\n"
+        f"👥 Всего пользователей: {total}\n"
+        f"👤 Пользователи: {stats.get('user', 0)}\n"
+        f"🧑‍💼 Менеджеры: {stats.get('manager', 0)}\n"
+        f"👑 Владельцы: {stats.get('owner', 0)}\n"
+        f"⭐ Premium: {stats.get('premium', 0)}\n\n"
+        "Цифры отражают текущее состояние.\n"
+        "Это не оценка и не прогноз."
+    )
+
+    await update.message.reply_text(
+        text,
+        reply_markup=OWNER_MENU,
+    )
 
 # ==================================================
 # FSM HANDLER
 # ==================================================
-# ... (функции без изменений) ...
+
+async def handle_owner_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if get_user_role(update.effective_user.id) != "owner":
+        return
+
+    mode = context.user_data.get("owner_mode")
+    if not mode:
+        return
+
+    raw = update.message.text.strip().lstrip("@")
+    telegram_id = None
+
+    if raw.isdigit():
+        telegram_id = int(raw)
+    else:
+        user = get_user_by_username(raw)
+        if not user:
+            await update.message.reply_text("❌ Пользователь не найден")
+            return
+        telegram_id = user["telegram_id"]
+
+    if mode == "add_manager":
+        ok = set_role_by_telegram_id(telegram_id, "manager")
+        msg = "✅ Менеджер успешно добавлен" if ok else "❌ Не удалось назначить менеджера"
+        await update.message.reply_text(msg)
+
+    elif mode == "remove_manager":
+        ok = set_role_by_telegram_id(telegram_id, "user")
+        msg = "✅ Менеджер удалён" if ok else "❌ Не удалось удалить менеджера"
+        await update.message.reply_text(msg)
+
+    context.user_data.pop("owner_mode", None)
+    await open_owner_menu(update, context)
 
 # ==================================================
-# EXIT OWNER MODE (OLD / REMOVED)
+# EXIT OWNER MODE (FIXED)
 # ==================================================
 
-# 📌 УДАЛЕНО: Эта функция больше не нужна, так как кнопка перенаправляется на open_owner_menu.
-# Для полного выхода из панели нужна отдельная, явно названная кнопка, 
-# если это функциональность действительно требуется.
-# async def exit_owner(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     context.user_data.pop("owner_mode", None)
-#     context.user_data.pop("ai_chat_mode", None)
-#     context.user_data.pop("pm_state", None)
-#     context.user_data.pop("ta_state", None)
-#     context.user_data.pop("ns_step", None)
-#     context.user_data.pop("growth", None)
+async def exit_owner(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop("owner_mode", None)
+    context.user_data.pop("ai_chat_mode", None)
+    context.user_data.pop("pm_state", None)
+    context.user_data.pop("ta_state", None)
+    context.user_data.pop("ns_step", None)
+    context.user_data.pop("growth", None)
 
-#     await update.message.reply_text(
-#         "Выход из панели владельца",
-#         reply_markup=main_menu_keyboard(),
-#     )
-#     return 
+    await update.message.reply_text(
+        "Выход из панели владельца",
+        reply_markup=main_menu_keyboard(),
+    )
+    
+    # ФИКС: Остановка распространения, устраняющая двойное сообщение.
+    return 
 
 # ==================================================
 # REGISTER
@@ -134,17 +230,9 @@ def register_owner_handlers(app):
     )
 
     app.add_handler(
-        # 📌 ФИКС: Кнопка "⬅️ Выйти в главное меню" теперь называется "⬅️ Главный раздел"
-        # и вызывает open_owner_menu (меню владельца)
-        MessageHandler(filters.Regex("^⬅️ Главный раздел$"), open_owner_menu),
+        MessageHandler(filters.Regex("^⬅️ Выйти в главное меню$"), exit_owner),
         group=1,
     )
-    
-    # 📌 УДАЛЕНО: Хендлер на старый текст кнопки:
-    # app.add_handler(
-    #     MessageHandler(filters.Regex("^⬅️ Выйти в главное меню$"), exit_owner),
-    #     group=1,
-    # )
 
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_owner_input),
