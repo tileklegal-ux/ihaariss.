@@ -1,157 +1,120 @@
 from telegram import Update
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, MessageHandler, filters
+
 from database.db import (
-    get_db_connection,
     get_user_role,
-    give_premium_days,
     get_user_by_username,
+    set_role_by_telegram_id,
+    give_premium_days,
 )
+from services.audit_log import log_event
+
+BTN_ADD_MANAGER = "➕ Добавить менеджера"
+BTN_REMOVE_MANAGER = "➖ Удалить менеджера"
+BTN_GIVE_PREMIUM = "⭐ Выдать Premium"
 
 
-# ---------------------------------------------------------
-# OWNER — Статистика проекта
-# ---------------------------------------------------------
-async def owner_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    conn = get_db_connection()
-    cur = conn.cursor()
+# -------------------------------------------------
+# ADD MANAGER
+# -------------------------------------------------
+async def add_manager(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    role = get_user_role(update.effective_user.id)
+    if role != "owner":
+        await update.message.reply_text("❌ Нет доступа.")
+        return
 
-    users = cur.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-    premium = cur.execute("SELECT COUNT(*) FROM users WHERE premium_days > 0").fetchone()[0]
-    managers = cur.execute("SELECT COUNT(*) FROM users WHERE role='manager'").fetchone()[0]
-    history = cur.execute("SELECT COUNT(*) FROM analysis_history").fetchone()[0]
+    if not context.args:
+        await update.message.reply_text("Укажи username менеджера.")
+        return
 
-    conn.close()
-
-    msg = (
-        "📊 *Статистика проекта*\n\n"
-        f"👥 Пользователи: {users}\n"
-        f"💎 Premium: {premium}\n"
-        f"🧑‍💼 Менеджеры: {managers}\n"
-        f"📦 Анализов: {history}"
-    )
-
-    await update.message.reply_text(msg, parse_mode="Markdown")
-
-
-# ---------------------------------------------------------
-# OWNER — список пользователей
-# ---------------------------------------------------------
-async def owner_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    rows = cur.execute("SELECT id, username, first_name, role FROM users ORDER BY id DESC LIMIT 20").fetchall()
-    conn.close()
-
-    if not rows:
-        return await update.message.reply_text("Нет пользователей.")
-
-    msg = "👥 *Последние 20 пользователей:*\n\n"
-    for r in rows:
-        msg += f"ID: {r['id']} | @{r['username']} | {r['first_name']} | роль: {r['role']}\n"
-
-    await update.message.reply_text(msg, parse_mode="Markdown")
-
-
-# ---------------------------------------------------------
-# OWNER — список менеджеров
-# ---------------------------------------------------------
-async def owner_managers(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    rows = cur.execute("SELECT id, username, first_name FROM users WHERE role='manager'").fetchall()
-    conn.close()
-
-    if not rows:
-        return await update.message.reply_text("Менеджеров пока нет.")
-
-    msg = "👔 *Менеджеры:*\n\n"
-    for r in rows:
-        msg += f"ID: {r['id']} | @{r['username']} | {r['first_name']}\n"
-
-    await update.message.reply_text(msg, parse_mode="Markdown")
-
-
-# ---------------------------------------------------------
-# OWNER — настройки (заглушка)
-# ---------------------------------------------------------
-async def owner_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔧 Раздел настроек в разработке.")
-
-
-# ---------------------------------------------------------
-# MANAGER — одобрить премиум
-# ---------------------------------------------------------
-async def manager_approve_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip()
-
-    if not text.startswith("@"):
-        return await update.message.reply_text("Введите username в формате: @username")
-
-    username = text.replace("@", "")
+    username = context.args[0]
     user = get_user_by_username(username)
 
     if not user:
-        return await update.message.reply_text("Пользователь не найден.")
+        await update.message.reply_text("Пользователь не найден.")
+        return
 
-    user_id = user["id"]
+    set_role_by_telegram_id(user["telegram_id"], "manager")
+    log_event(update.effective_user.id, f"add_manager:{user['telegram_id']}")
 
-    # даём 30 дней премиума
-    give_premium_days(user_id, 30)
+    await update.message.reply_text(
+        f"✅ Пользователь @{user['username']} назначен менеджером."
+    )
 
-    await update.message.reply_text(f"Премиум для @{username} активирован на 30 дней.")
 
-    # уведомление пользователю
+# -------------------------------------------------
+# REMOVE MANAGER
+# -------------------------------------------------
+async def remove_manager(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    role = get_user_role(update.effective_user.id)
+    if role != "owner":
+        await update.message.reply_text("❌ Нет доступа.")
+        return
+
+    if not context.args:
+        await update.message.reply_text("Укажи username менеджера.")
+        return
+
+    username = context.args[0]
+    user = get_user_by_username(username)
+
+    if not user:
+        await update.message.reply_text("Пользователь не найден.")
+        return
+
+    set_role_by_telegram_id(user["telegram_id"], "user")
+    log_event(update.effective_user.id, f"remove_manager:{user['telegram_id']}")
+
+    await update.message.reply_text(
+        f"✅ Пользователь @{user['username']} больше не менеджер."
+    )
+
+
+# -------------------------------------------------
+# GIVE PREMIUM (MANAGER)
+# -------------------------------------------------
+async def give_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    role = get_user_role(update.effective_user.id)
+    if role not in ("manager", "owner"):
+        await update.message.reply_text("❌ Нет доступа.")
+        return
+
+    if len(context.args) < 2:
+        await update.message.reply_text("Формат: username дни")
+        return
+
+    username = context.args[0]
+    days = context.args[1]
+
+    user = get_user_by_username(username)
+    if not user:
+        await update.message.reply_text("Пользователь не найден.")
+        return
+
     try:
-        await context.bot.send_message(
-            chat_id=user_id,
-            text="🎉 Ваш аккаунт получил PREMIUM доступ на 30 дней!",
-        )
-    except:
-        pass
+        days = int(days)
+    except ValueError:
+        await update.message.reply_text("Дни должны быть числом.")
+        return
+
+    give_premium_days(user["telegram_id"], days)
+    log_event(update.effective_user.id, f"premium_granted:{user['telegram_id']}:{days}")
+
+    await update.message.reply_text(
+        f"⭐ Premium для @{user['username']} выдан на {days} дней."
+    )
 
 
-# ---------------------------------------------------------
-# MANAGER — последние клиенты
-# ---------------------------------------------------------
-async def manager_clients(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    rows = cur.execute("SELECT id, username, first_name, premium_days FROM users ORDER BY id DESC LIMIT 20").fetchall()
-    conn.close()
-
-    if not rows:
-        return await update.message.reply_text("Клиентов пока нет.")
-
-    msg = "📝 *Последние клиенты:*\n\n"
-    for r in rows:
-        msg += f"ID: {r['id']} | @{r['username']} | премиум дней: {r['premium_days']}\n"
-
-    await update.message.reply_text(msg, parse_mode="Markdown")
-
-
-# ---------------------------------------------------------
-# MANAGER — история анализов
-# ---------------------------------------------------------
-async def manager_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    rows = cur.execute(
-        "SELECT user_id, niche, product, created_at FROM analysis_history ORDER BY id DESC LIMIT 20"
-    ).fetchall()
-    conn.close()
-
-    if not rows:
-        return await update.message.reply_text("Анализов пока нет.")
-
-    msg = "📦 *Последние 20 анализов:*\n\n"
-    for r in rows:
-        msg += (
-            f"Пользователь {r['user_id']} | Ниша: {r['niche']} | "
-            f"Товар: {r['product']} | Время: {r['created_at']}\n"
-        )
-
-    await update.message.reply_text(msg, parse_mode="Markdown")
+# -------------------------------------------------
+# REGISTRATION
+# -------------------------------------------------
+def register_role_actions(app):
+    app.add_handler(
+        MessageHandler(filters.Regex(f"^{BTN_ADD_MANAGER}$"), add_manager)
+    )
+    app.add_handler(
+        MessageHandler(filters.Regex(f"^{BTN_REMOVE_MANAGER}$"), remove_manager)
+    )
+    app.add_handler(
+        MessageHandler(filters.Regex(f"^{BTN_GIVE_PREMIUM}$"), give_premium)
+    )
