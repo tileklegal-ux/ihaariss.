@@ -31,6 +31,12 @@ from handlers.owner import (
     register_owner_handlers,
 )
 
+# EXPORT (PDF / EXCEL)
+from handlers.export import (
+    export_pdf,
+    export_excel,
+)
+
 warnings.filterwarnings("ignore", category=UserWarning)
 
 logging.basicConfig(
@@ -84,6 +90,17 @@ def main():
 
     # USER
     register_handlers_user(application)
+
+    # EXPORT
+    application.add_handler(
+        MessageHandler(filters.Regex("^📄 Скачать PDF$"), export_pdf),
+        group=3,
+    )
+
+    application.add_handler(
+        MessageHandler(filters.Regex("^📊 Скачать Excel$"), export_excel),
+        group=3,
+    )
 
     application.run_polling()
 
