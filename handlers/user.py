@@ -685,7 +685,8 @@ if user_text.startswith("/"):
 if not is_user_premium(update.effective_user.id):
     return
 
-await update.message.chat.send_action("typing")
+await
+update.message.chat.send_action("typing")
 
 try:
         answer = await ask_openai(user_text)
