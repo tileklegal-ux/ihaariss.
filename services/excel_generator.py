@@ -1,56 +1,25 @@
-# services/pdf_generator.py
-
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-from datetime import datetime
-import os
+from openpyxl import Workbook
+from io import BytesIO
 
 
-def generate_simple_pdf(
-    filename: str,
-    title: str,
-    content: str,
-) -> str:
+def generate_excel_report(headers: list[str], rows: list[list]):
     """
-    Генерирует простой PDF-файл с заголовком и текстом.
-    Возвращает путь к файлу.
+    headers: список заголовков колонок
+    rows: список строк (каждая строка — список значений)
     """
 
-    # папка для PDF
-    output_dir = "generated_files"
-    os.makedirs(output_dir, exist_ok=True)
+    wb = Workbook()
+    ws = wb.active
 
-    file_path = os.path.join(output_dir, filename)
+    # Заголовки
+    ws.append(headers)
 
-    c = canvas.Canvas(file_path, pagesize=A4)
-    width, height = A4
+    # Данные
+    for row in rows:
+        ws.append(row)
 
-    # Заголовок
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(40, height - 60, title)
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
 
-    # Дата
-    c.setFont("Helvetica", 9)
-    c.drawString(
-        40,
-        height - 80,
-        f"Дата: {datetime.now().strftime('%d.%m.%Y %H:%M')}",
-    )
-
-    # Основной текст
-    c.setFont("Helvetica", 11)
-
-    y = height - 120
-    for line in content.split("\n"):
-        if y < 40:
-            c.showPage()
-            c.setFont("Helvetica", 11)
-            y = height - 60
-
-        c.drawString(40, y, line)
-        y -= 16
-
-    c.showPage()
-    c.save()
-
-    return file_path
+    return buffer
