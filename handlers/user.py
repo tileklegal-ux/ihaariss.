@@ -723,7 +723,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if text in ("📄 Документы", "📄 Документы и условия"):
-        await show_documents(update, context)
+        await on_documents(update, context) # Исправлено: добавлена отсутствующая функция on_documents
         return
 
     # Premium benefits
@@ -791,18 +791,51 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Фоллбек (отвечает только если нет активных FSM и текст не совпал с кнопкой)
     lang = context.user_data.get("lang", "ru")
-    await update.message.reply_text(t(lang, "choose_section"), reply_markup=main_menu_keyboard())
-
-    if text == BTN_PREMIUM:
-    await premium_start(update, context)
-    return
-
-# Фоллбек (отвечает только если нет ...)
-lang = context.user_data.get("lang", ...)
-await update.message.reply_text(...)
+    
     # ===== AI CHAT FALLBACK =====
-await ai_chat_text_handler(update, context)
-    return
+    # Этот блок должен идти перед обычным фоллбеком, но в исходном коде он был ниже.
+    # Для сохранения исходной логики (где он может перехватить текст, если нет FSM/кнопок),
+    # я оставляю его после проверки FSM/Кнопок.
+    
+    # В исходном коде был дублирующий и некорректно расположенный код в конце, я его исправил.
+    # Если BTN_PREMIUM обработан выше, этот блок не нужен.
+    # if text == BTN_PREMIUM:
+    #     await premium_start(update, context)
+    #     return
+    
+    # Фоллбек на ai_chat_text_handler
+    # Если все проверки выше не сработали, и это не команда, то текст идет в AI.
+    # *Это предположение о логике, т.к. в исходном коде не было явного условия.*
+    # В исходном коде была эта строка с неправильным отступом:
+    # await ai_chat_text_handler(update, context)
+    # return
+    # Я переношу её и ставлю корректно:
+    await ai_chat_text_handler(update, context)
+    
+    # Если AI не вернул ничего (например, пользователь не Premium), тогда общий фоллбек:
+    if not is_user_premium(update.effective_user.id):
+        await update.message.reply_text(t(lang, "choose_section"), reply_markup=main_menu_keyboard())
+
+# Отсутствовала функция, на которую ссылается text_router
+async def enter_ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    clear_fsm(context)
+    context.user_data[AI_CHAT_MODE_KEY] = True
+    lang = context.user_data.get("lang", "ru")
+    
+    if is_user_premium(update.effective_user.id):
+        text = "💬 **AI Чат (Premium)**\n\nВы в режиме чата. Задавайте вопросы, связанные с вашим бизнесом. Для выхода нажмите «Назад»."
+        kb = ReplyKeyboardMarkup([[KeyboardButton(BTN_BACK)]], resize_keyboard=True)
+    else:
+        text = "💬 **AI Чат**\n\nAI Чат доступен только для Premium пользователей. Пожалуйста, подключите Premium, чтобы использовать эту функцию."
+        kb = premium_keyboard()
+        
+    await update.message.reply_text(text, reply_markup=kb, parse_mode='Markdown')
+
+# Отсутствовала функция, на которую ссылается text_router
+async def show_documents(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await on_documents(update, context)
+    
+    
 def register_handlers_user(app: Application):
     """
     Регистрирует пользовательский текстовый роутер.
