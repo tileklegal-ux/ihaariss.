@@ -689,51 +689,44 @@ async def ai_chat_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 # =============================
 
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text:
-        return
-
-    user_text = update.message.text.strip()
-    if not user_text:
-        return
+    user_text = update.message.text
+    text = user_text
 
     # команды не обрабатываем здесь
-if user_text.startswith("/"):
+    if user_text.startswith("/"):
+        return
+
+    role = get_user_role(update.effective_user.id)
+
+    # owner / manager НЕ идут в text_router
+    if role in ("owner", "manager"):
+        return
+
+    # =========================
+    # AI CHAT — обычный пользователь
+    # =========================
+    await ai_chat_text_handler(update, context)
+    await exit_ai_chat(update, context)
     return
 
-role = get_user_role(update.effective_user.id)
+    # =========================
+    # КНОПКИ
+    # =========================
+    if text == BTN_AI_CHAT:
+        await enter_ai_chat(update, context)
+        return
 
-# owner / manager НЕ идут в text_router
-if role in ("owner", "manager"):
-    return
+    if text == BTN_YES:
+        await on_yes(update, context)
+        return
 
-# =========================
-# AI CHAT — обычный пользователь
-# =========================
-await ai_chat_text_handler(update, context)
-await exit_ai_chat(update, context)
-return
+    if text == BTN_NO:
+        await on_no(update, context)
+        return
 
-
-# =========================
-# КНОПКИ
-# =========================
-if text == BTN_AI_CHAT:
-    await enter_ai_chat(update, context)
-    return
-
-# YES / NO
-if text == BTN_YES:
-    await on_yes(update, context)
-    return
-
-if text == BTN_NO:
-    await on_no(update, context)
-    return
-
-# Документы и условия
-if text in ("📄 Документы", "📄 Документы и условия"):
-    await show_documents(update, context)
-    return
+    if text in ("📄 Документы", "📄 Документы и условия"):
+        await show_documents(update, context)
+        return
 
     # Premium benefits
     if text == BTN_PREMIUM_BENEFITS:
