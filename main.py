@@ -9,21 +9,24 @@ from telegram.ext import (
 
 from config import BOT_TOKEN
 
-from database.db import get_user_role, init_db
+from database.db import get_user_role
 
+# USER
 from handlers.user import (
     cmd_start_user,
     register_handlers_user,
 )
 
+# MANAGER
 from handlers.manager import (
+    manager_panel,
     register_manager_handlers,
-    manager_keyboard,
 )
 
+# OWNER
 from handlers.owner import (
-    owner_start,
-    register_handlers_owner,
+    owner_panel,
+    register_owner_handlers,
 )
 
 logging.basicConfig(
@@ -40,40 +43,43 @@ async def cmd_start_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
     try:
-        role = get_user_role(user_id)
+        role = get_user_role(user_id) or "user"
     except Exception:
-        logger.exception("get_user_role failed in cmd_start_router")
+        logger.exception("get_user_role failed in /start router")
         role = "user"
 
+    # Сбрасываем transient состояние на входе (чтобы не залипали FSM)
+    try:
+        context.user_data.clear()
+    except Exception:
+        pass
+
     if role == "owner":
-        await owner_start(update, context)
+        await owner_panel(update, context)
         return
 
     if role == "manager":
-        await update.message.reply_text(
-            "🧑‍💼 Панель менеджера",
-            reply_markup=manager_keyboard(),
-        )
+        await manager_panel(update, context)
         return
 
     await cmd_start_user(update, context)
 
 
-# ==================================================
-# MAIN
-# ==================================================
 def main():
-    init_db()
-
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    application.add_handler(CommandHandler("start", cmd_start_router), group=0)
+    # /start — всегда один, всегда первый, и блокирует остальные группы
+    application.add_handler(
+        CommandHandler("start", cmd_start_router),
+        group=0,
+    )
 
-    register_handlers_owner(application)
-    register_manager_handlers(application)
-    register_handlers_user(application)
+    # Важно: owner/manager/user регистрируют ТОЛЬКО текстовые/кнопочные хендлеры
+    register_owner_handlers(application)     # group=1
+    register_manager_handlers(application)   # group=2
+    register_handlers_user(application)      # group=4
 
-    application.run_polling()
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
