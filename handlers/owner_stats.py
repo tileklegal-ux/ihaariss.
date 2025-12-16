@@ -66,10 +66,8 @@ async def owner_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not managers_stat:
         managers_stat = "\n— нет данных"
 
-    # audit owner view
     log_event(update.effective_user.id, "owner_view_extended_stats")
 
-    # --- reply ---
     await update.message.reply_text(
         "📊 *Расширенная статистика Artbazar AI*\n\n"
         f"👥 Всего пользователей: {total_users}\n\n"
@@ -80,6 +78,14 @@ async def owner_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👨‍💼 Активации по менеджерам:{managers_stat}",
         parse_mode="Markdown",
     )
+
+
+# -------------------------------------------------
+# АЛИАС ДЛЯ СОВМЕСТИМОСТИ
+# -------------------------------------------------
+# ❗ owner.py ожидает show_owner_stats
+async def show_owner_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await owner_stats(update, context)
 
 
 # -------------------------------------------------
