@@ -707,11 +707,10 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # дальше — обычный user
-    await ai_chat_text_handler(update, context)
-            await exit_ai_chat(update, context)
-            return
-        await ai_chat_text_handler(update, context)
-        return
+await ai_chat_text_handler(update, context)
+await exit_ai_chat(update, context)
+return
+    
 
     if text == BTN_AI_CHAT:
         await enter_ai_chat(update, context)
