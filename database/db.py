@@ -114,11 +114,12 @@ def create_or_update_user(telegram_id: int, username: str, first_name: str):
             (username, first_name, now, telegram_id),
         )
     else:
+        # 📌 ВРЕМЕННАЯ ЗАПЛАТКА: Роль по умолчанию 'manager' для восстановления доступа @Artbazar_support
         cur.execute(
             """
             INSERT INTO users
             (telegram_id, username, first_name, role, is_premium, created_at, updated_at)
-            VALUES (?, ?, ?, 'user', 0, ?, ?)
+            VALUES (?, ?, ?, 'manager', 0, ?, ?) 
             """,
             (telegram_id, username, first_name, now, now),
         )
@@ -166,10 +167,9 @@ def get_user_by_username(username: str):
 
     _ensure_users_schema(cur)
 
-    # 📌 ИСПРАВЛЕНО: Очищаем входящий username и приводим к нижнему регистру
+    # ИСПРАВЛЕНИЕ: Регистронезависимый поиск для Premium
     username_lower = (username or "").lstrip("@").lower()
 
-    # 📌 ИСПРАВЛЕНО: Используем LOWER(username) в SQL-запросе для сравнения в нижнем регистре
     cur.execute(
         "SELECT telegram_id, username, role FROM users WHERE LOWER(username) = ?",
         (username_lower,),
@@ -242,3 +242,4 @@ def get_stats():
 
     conn.close()
     return stats
+    
