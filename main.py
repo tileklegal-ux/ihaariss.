@@ -8,21 +8,23 @@ from telegram.ext import (
 )
 
 from config import BOT_TOKEN
-from database.db import get_user_role
 
-# USER
+from database.db import get_user_role, init_db
+
 from handlers.user import (
     cmd_start_user,
     register_handlers_user,
 )
 
-# MANAGER
 from handlers.manager import (
     register_manager_handlers,
+    manager_keyboard,
 )
 
-# OWNER
-from handlers.owner import register_handlers_owner
+from handlers.owner import (
+    owner_start,
+    register_handlers_owner,
+)
 
 logging.basicConfig(
     format="%(asctime)s — %(name)s — %(levelname)s — %(message)s",
@@ -32,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 # ==================================================
-# /start — ROUTER ТОЛЬКО ДЛЯ USER
+# /start — ЕДИНАЯ ТОЧКА ВХОДА
 # ==================================================
 async def cmd_start_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -40,10 +42,18 @@ async def cmd_start_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         role = get_user_role(user_id)
     except Exception:
+        logger.exception("get_user_role failed in cmd_start_router")
         role = "user"
 
-    # OWNER и MANAGER сюда не заходят
-    if role in ("owner", "manager"):
+    if role == "owner":
+        await owner_start(update, context)
+        return
+
+    if role == "manager":
+        await update.message.reply_text(
+            "🧑‍💼 Панель менеджера",
+            reply_markup=manager_keyboard(),
+        )
         return
 
     await cmd_start_user(update, context)
@@ -53,21 +63,14 @@ async def cmd_start_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # MAIN
 # ==================================================
 def main():
+    init_db()
+
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # OWNER — САМЫЙ ПЕРВЫЙ
+    application.add_handler(CommandHandler("start", cmd_start_router), group=0)
+
     register_handlers_owner(application)
-
-    # MANAGER
     register_manager_handlers(application)
-
-    # USER /start
-    application.add_handler(
-        CommandHandler("start", cmd_start_router),
-        group=3,
-    )
-
-    # USER остальной текст
     register_handlers_user(application)
 
     application.run_polling()
