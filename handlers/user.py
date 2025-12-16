@@ -676,7 +676,7 @@ async def enter_ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def ai_chat_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = (update.message.text or "").strip()
-    if not user_text:
+if not user_text:
     return
 
 if user_text.startswith("/"):
