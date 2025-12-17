@@ -47,7 +47,22 @@ async def add_manager_username_handler(update: Update, context: ContextTypes.DEF
     if not context.user_data.get(ADD_MANAGER_STATE):
         return
     
-    username = update.message.text.strip()
+    text = update.message.text.strip()
+    
+    # Обработка кнопки Назад
+    if text == "⬅️ Назад" or text == "Назад":
+        # Сбрасываем состояние
+        context.user_data.pop(ADD_MANAGER_STATE, None)
+        context.user_data.pop(EXPECTING_USERNAME, None)
+        
+        # Возвращаемся в панель владельца
+        role = get_user_role(update.effective_user.id)
+        if role == "owner":
+            from handlers.owner import owner_start
+            await owner_start(update, context)
+        return
+    
+    username = text
     
     # Убираем @ если пользователь его ввел
     if username.startswith('@'):
@@ -109,7 +124,22 @@ async def remove_manager_username_handler(update: Update, context: ContextTypes.
     if not context.user_data.get(REMOVE_MANAGER_STATE):
         return
     
-    username = update.message.text.strip()
+    text = update.message.text.strip()
+    
+    # Обработка кнопки Назад
+    if text == "⬅️ Назад" or text == "Назад":
+        # Сбрасываем состояние
+        context.user_data.pop(REMOVE_MANAGER_STATE, None)
+        context.user_data.pop(EXPECTING_USERNAME, None)
+        
+        # Возвращаемся в панель владельца
+        role = get_user_role(update.effective_user.id)
+        if role == "owner":
+            from handlers.owner import owner_start
+            await owner_start(update, context)
+        return
+    
+    username = text
     
     # Убираем @ если пользователь его ввел
     if username.startswith('@'):
@@ -171,7 +201,28 @@ async def give_premium_username_handler(update: Update, context: ContextTypes.DE
     if not context.user_data.get(GIVE_PREMIUM_STATE):
         return
     
-    username = update.message.text.strip()
+    text = update.message.text.strip()
+    
+    # Обработка кнопки Назад
+    if text == "⬅️ Назад" or text == "Назад":
+        # Сбрасываем состояние
+        context.user_data.pop(GIVE_PREMIUM_STATE, None)
+        context.user_data.pop(EXPECTING_USERNAME, None)
+        context.user_data.pop(EXPECTING_DAYS, None)
+        context.user_data.pop("temp_username", None)
+        context.user_data.pop("temp_user_id", None)
+        
+        # Возвращаемся в панель менеджера/владельца
+        role = get_user_role(update.effective_user.id)
+        if role == "manager":
+            from handlers.manager import manager_start
+            await manager_start(update, context)
+        elif role == "owner":
+            from handlers.owner import owner_start
+            await owner_start(update, context)
+        return
+    
+    username = text
     
     # Убираем @ если пользователь его ввел
     if username.startswith('@'):
@@ -206,8 +257,29 @@ async def give_premium_days_handler(update: Update, context: ContextTypes.DEFAUL
     if not context.user_data.get(GIVE_PREMIUM_STATE) or not context.user_data.get(EXPECTING_DAYS):
         return
     
+    text = update.message.text.strip()
+    
+    # Обработка кнопки Назад
+    if text == "⬅️ Назад" or text == "Назад":
+        # Сбрасываем состояние
+        context.user_data.pop(GIVE_PREMIUM_STATE, None)
+        context.user_data.pop(EXPECTING_USERNAME, None)
+        context.user_data.pop(EXPECTING_DAYS, None)
+        context.user_data.pop("temp_username", None)
+        context.user_data.pop("temp_user_id", None)
+        
+        # Возвращаемся в панель менеджера/владельца
+        role = get_user_role(update.effective_user.id)
+        if role == "manager":
+            from handlers.manager import manager_start
+            await manager_start(update, context)
+        elif role == "owner":
+            from handlers.owner import owner_start
+            await owner_start(update, context)
+        return
+    
     try:
-        days = int(update.message.text.strip())
+        days = int(text)
         if days <= 0:
             await update.message.reply_text("❌ Количество дней должно быть положительным числом.")
             return
@@ -243,44 +315,11 @@ async def give_premium_days_handler(update: Update, context: ContextTypes.DEFAUL
 
 
 # -------------------------------------------------
-# ОБРАБОТЧИК BACK ДЛЯ ВЛАДЕЛЬЦА И МЕНЕДЖЕРА
-# -------------------------------------------------
-async def handle_back_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка кнопки Назад для сброса FSM состояний"""
-    text = update.message.text or ""
-    
-    if text == "⬅️ Выйти" or text == "Назад":
-        # Сбрасываем все состояния FSM
-        context.user_data.pop(ADD_MANAGER_STATE, None)
-        context.user_data.pop(REMOVE_MANAGER_STATE, None)
-        context.user_data.pop(GIVE_PREMIUM_STATE, None)
-        context.user_data.pop(EXPECTING_USERNAME, None)
-        context.user_data.pop(EXPECTING_DAYS, None)
-        context.user_data.pop("temp_username", None)
-        context.user_data.pop("temp_user_id", None)
-        
-        # Возвращаемся в соответствующее меню
-        role = get_user_role(update.effective_user.id)
-        if role == "owner":
-            from handlers.owner import owner_start
-            await owner_start(update, context)
-        elif role == "manager":
-            from handlers.manager import manager_start
-            await manager_start(update, context)
-
-
-# -------------------------------------------------
 # ГЛАВНЫЙ ТЕКСТОВЫЙ РОУТЕР ДЛЯ ВЛАДЕЛЬЦА И МЕНЕДЖЕРА
 # -------------------------------------------------
 async def role_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Роутер текстовых сообщений для владельца и менеджера"""
+    """Роутер текстовых сообщений для владельца и менеджера - ТОЛЬКО FSM"""
     text = update.message.text or ""
-    role = get_user_role(update.effective_user.id)
-    
-    # Обработка кнопки Назад
-    if text == "⬅️ Выйти" or text == "Назад":
-        await handle_back_button(update, context)
-        return
     
     # Роутинг по состоянию FSM
     if context.user_data.get(ADD_MANAGER_STATE):
@@ -298,24 +337,19 @@ async def role_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await give_premium_days_handler(update, context)
         return
     
-    # Если нет активного FSM состояния, отправляем в соответствующий handler
-    if role == "owner":
-        from handlers.owner import owner_text_router
-        await owner_text_router(update, context)
-    elif role == "manager":
-        from handlers.manager import manager_text_router
-        await manager_text_router(update, context)
+    # Если нет активного FSM состояния - пропускаем, дальше обработают другие handlers
+    return
 
 
 # -------------------------------------------------
 # REGISTRATION
 # -------------------------------------------------
 def register_role_actions(app):
-    # Регистрируем роутер для текстовых сообщений владельца и менеджера
+    # Регистрируем роутер для FSM состояний владельца и менеджера
     app.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
             role_text_router
         ),
-        group=2
+        group=1  # ПЕРВАЯ группа - FSM
     )
