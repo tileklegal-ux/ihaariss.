@@ -36,7 +36,6 @@ def main_menu_keyboard():
         [
             # 🔝 Самое важное — наверху
             [KeyboardButton(BTN_BIZ), KeyboardButton(BTN_AI_CHAT)],
-
             [KeyboardButton(BTN_PROFILE)],
             [KeyboardButton(BTN_DOCS)],
             [KeyboardButton(BTN_PREMIUM)],
@@ -67,11 +66,20 @@ def growth_channels_keyboard():
     )
 
 
-def step_keyboard():
-    return ReplyKeyboardMarkup(
-        [[KeyboardButton(BTN_BACK)]],
-        resize_keyboard=True,
-    )
+def step_keyboard(options=None):
+    """Клавиатура для шагов FSM. Принимает опциональный список options."""
+    if options:
+        return ReplyKeyboardMarkup(
+            [[KeyboardButton(opt)] for opt in options]
+            + [[KeyboardButton(BTN_BACK)]],
+            resize_keyboard=True,
+        )
+    else:
+        # Если options не переданы - только кнопка "Назад"
+        return ReplyKeyboardMarkup(
+            [[KeyboardButton(BTN_BACK)]],
+            resize_keyboard=True,
+        )
 
 
 def premium_keyboard():
