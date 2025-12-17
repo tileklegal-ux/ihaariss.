@@ -1,4 +1,4 @@
-# handlers/owner.py (ПОЛНЫЙ ИСПРАВЛЕННЫЙ ФАЙЛ)
+# handlers/owner.py
 
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ContextTypes, MessageHandler, filters
