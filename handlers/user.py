@@ -45,7 +45,7 @@ from handlers.user_helpers import (
     insights_bridge_text,
 )
 
-# ✅ ЕДИНСТВЕННЫЙ "владелец" личного кабинета и экспорта — handlers/profile.py
+# ✅ ЕДИНСТВЕННЫЙ “владелец” личного кабинета и экспорта — handlers/profile.py
 from handlers.profile import on_profile, on_export_excel, on_export_pdf
 
 # ✅ ДОБАВЛЕНО: юридические документы
@@ -664,11 +664,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if text == BTN_PREMIUM:
         await premium_start(update, context)
-        return
-    if text == BTN_ANALYSIS or text == BTN_NICHE:
-        # Эти кнопки должны быть удалены из main_menu_keyboard
-        # Но на случай, если они остались - показываем бизнес-хаб
-        await on_business_analysis(update, context)
         return
 
     # 10) Кнопки ПОДМЕНЮ "Бизнес-анализ"
