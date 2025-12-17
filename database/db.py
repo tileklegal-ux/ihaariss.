@@ -3,6 +3,7 @@
 import os
 import sqlite3
 import psycopg2
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -10,7 +11,7 @@ SQLITE_DB_PATH = "database/artbazar.db"
 
 
 # =========================
-# CONNECTIONS
+# CONNECTION
 # =========================
 
 def is_postgres() -> bool:
@@ -24,7 +25,6 @@ def get_db_connection():
     return sqlite3.connect(SQLITE_DB_PATH)
 
 
-# алиас для совместимости
 get_connection = get_db_connection
 
 
@@ -39,84 +39,69 @@ def get_user(telegram_id: int) -> Optional[Dict[str, Any]]:
         if is_postgres():
             cur.execute(
                 """
-                SELECT user_id, telegram_id, username, first_name, last_name,
-                       role, premium_until, is_premium
-                FROM users
-                WHERE telegram_id = %s
+                SELECT telegram_id, username, role, is_premium, premium_until
+                FROM users WHERE telegram_id = %s
                 """,
                 (telegram_id,),
             )
             row = cur.fetchone()
-            if not row:
-                return None
-            return {
-                "user_id": row[0],
-                "telegram_id": row[1],
-                "username": row[2],
-                "first_name": row[3],
-                "last_name": row[4],
-                "role": row[5],
-                "premium_until": row[6],
-                "is_premium": row[7],
-            }
         else:
             cur.execute(
-                "SELECT telegram_id, username, role, is_premium FROM users WHERE telegram_id = ?",
+                """
+                SELECT telegram_id, username, role, is_premium, premium_until
+                FROM users WHERE telegram_id = ?
+                """,
                 (telegram_id,),
             )
             row = cur.fetchone()
-            if not row:
-                return None
-            return {
-                "telegram_id": row[0],
-                "username": row[1],
-                "role": row[2],
-                "is_premium": bool(row[3]),
-            }
+
+        if not row:
+            return None
+
+        return {
+            "telegram_id": row[0],
+            "username": row[1],
+            "role": row[2],
+            "is_premium": bool(row[3]),
+            "premium_until": row[4],
+        }
     finally:
         conn.close()
 
 
 def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
-    """КРИТИЧЕСКАЯ функция для OWNER → add manager"""
     conn = get_db_connection()
     try:
         cur = conn.cursor()
+        uname = username.lstrip("@")
+
         if is_postgres():
             cur.execute(
                 """
-                SELECT user_id, telegram_id, username, role
-                FROM users
-                WHERE username = %s
+                SELECT telegram_id, username, role
+                FROM users WHERE username = %s
                 """,
-                (username.lstrip("@"),),
+                (uname,),
             )
             row = cur.fetchone()
-            if not row:
-                return None
-            return {
-                "user_id": row[0],
-                "telegram_id": row[1],
-                "username": row[2],
-                "role": row[3],
-            }
         else:
             cur.execute(
                 """
                 SELECT telegram_id, username, role
-                FROM users
-                WHERE username = ?
+                FROM users WHERE username = ?
                 """,
-                (username.lstrip("@"),),
+                (uname,),
             )
             row = cur.fetchone()
-            if not row:
-                return None
-            return {
-                "telegram_id": row[0],
-                "username": row[1],
-                "role": row[2],
-            }
+
+        if not row:
+            return None
+
+        return {
+            "telegram_id": row[0],
+            "username": row[1],
+            "role": row[2],
+        }
     finally:
         conn.close()
 
@@ -131,52 +116,46 @@ def ensure_user_exists(
     conn = get_db_connection()
     try:
         cur = conn.cursor()
+
         if is_postgres():
-            cur.execute("SELECT user_id FROM users WHERE telegram_id = %s", (telegram_id,))
+            cur.execute(
+                "SELECT telegram_id FROM users WHERE telegram_id = %s",
+                (telegram_id,),
+            )
             exists = cur.fetchone()
-            if exists:
+
+            if not exists:
                 cur.execute(
                     """
-                    UPDATE users
-                    SET username = %s, first_name = %s, last_name = %s
-                    WHERE telegram_id = %s
+                    INSERT INTO users
+                    (telegram_id, username, role, is_premium)
+                    VALUES (%s, %s, %s, %s)
                     """,
-                    (username, first_name, last_name, telegram_id),
-                )
-            else:
-                cur.execute(
-                    """
-                    INSERT INTO users (
-                        user_id, telegram_id, username,
-                        first_name, last_name, role, language, is_premium
-                    )
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-                    """,
-                    (
-                        telegram_id,
-                        telegram_id,
-                        username,
-                        first_name,
-                        last_name,
-                        "user",
-                        language,
-                        False,
-                    ),
+                    (telegram_id, username, "user", False),
                 )
         else:
-            cur.execute("SELECT telegram_id FROM users WHERE telegram_id = ?", (telegram_id,))
+            cur.execute(
+                "SELECT telegram_id FROM users WHERE telegram_id = ?",
+                (telegram_id,),
+            )
             if not cur.fetchone():
                 cur.execute(
                     """
-                    INSERT INTO users (telegram_id, username, role, is_premium)
-                    VALUES (?,?,?,?)
+                    INSERT INTO users
+                    (telegram_id, username, role, is_premium)
+                    VALUES (?, ?, ?, ?)
                     """,
                     (telegram_id, username, "user", 0),
                 )
+
         conn.commit()
     finally:
         conn.close()
 
+
+# =========================
+# ROLES
+# =========================
 
 def get_user_role(telegram_id: int) -> str:
     user = get_user(telegram_id)
@@ -202,10 +181,46 @@ def set_role_by_telegram_id(telegram_id: int, role: str):
         conn.close()
 
 
-# алиас
 set_user_role = set_role_by_telegram_id
 
 
+# =========================
+# PREMIUM
+# =========================
+
 def is_user_premium(telegram_id: int) -> bool:
     user = get_user(telegram_id)
-    return bool(user and user.get("is_premium"))
+    return bool(user and user["is_premium"])
+
+
+def give_premium_days(telegram_id: int, days: int):
+    """Используется OWNER / MANAGER"""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        until = datetime.utcnow() + timedelta(days=days)
+
+        if is_postgres():
+            cur.execute(
+                """
+                UPDATE users
+                SET is_premium = %s,
+                    premium_until = %s
+                WHERE telegram_id = %s
+                """,
+                (True, until, telegram_id),
+            )
+        else:
+            cur.execute(
+                """
+                UPDATE users
+                SET is_premium = 1,
+                    premium_until = ?
+                WHERE telegram_id = ?
+                """,
+                (until.isoformat(), telegram_id),
+            )
+
+        conn.commit()
+    finally:
+        conn.close()
