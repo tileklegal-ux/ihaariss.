@@ -9,10 +9,6 @@ SQLITE_DB_PATH = os.getenv("SQLITE_DB_PATH", "database/artbazar.db")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 
-# ==================================================
-# CONNECTION
-# ==================================================
-
 def _is_postgres() -> bool:
     return bool(DATABASE_URL)
 
@@ -24,13 +20,8 @@ def get_db_connection():
     return sqlite3.connect(SQLITE_DB_PATH)
 
 
-# alias (legacy)
 get_connection = get_db_connection
 
-
-# ==================================================
-# USERS
-# ==================================================
 
 def ensure_user_exists(telegram_id: int, username: str = None):
     """Создает или обновляет пользователя в БД"""
@@ -38,15 +29,24 @@ def ensure_user_exists(telegram_id: int, username: str = None):
     try:
         cur = conn.cursor()
         if _is_postgres():
+            # Проверяем, существует ли пользователь
             cur.execute(
-                """
-                INSERT INTO users (telegram_id, username, role, is_premium, premium_until)
-                VALUES (%s, %s, 'user', FALSE, NULL)
-                ON CONFLICT (telegram_id) 
-                DO UPDATE SET username = EXCLUDED.username
-                """,
-                (telegram_id, username)
+                "SELECT telegram_id FROM users WHERE telegram_id = %s",
+                (telegram_id,)
             )
+            if cur.fetchone():
+                # Обновляем username, если он изменился
+                if username:
+                    cur.execute(
+                        "UPDATE users SET username = %s WHERE telegram_id = %s",
+                        (username, telegram_id)
+                    )
+            else:
+                # Создаем нового пользователя
+                cur.execute(
+                    "INSERT INTO users (telegram_id, username, role, is_premium, premium_until) VALUES (%s, %s, 'user', FALSE, NULL)",
+                    (telegram_id, username)
+                )
         else:
             # SQLite
             cur.execute(
@@ -54,14 +54,12 @@ def ensure_user_exists(telegram_id: int, username: str = None):
                 (telegram_id,)
             )
             if cur.fetchone():
-                # Обновляем username, если он изменился
                 if username:
                     cur.execute(
                         "UPDATE users SET username = ? WHERE telegram_id = ?",
                         (username, telegram_id)
                     )
             else:
-                # Создаем нового
                 cur.execute(
                     "INSERT INTO users (telegram_id, username, role, is_premium, premium_until) VALUES (?, ?, 'user', 0, NULL)",
                     (telegram_id, username)
@@ -105,7 +103,6 @@ def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        # Регистронезависимый поиск
         if _is_postgres():
             cur.execute(
                 "SELECT telegram_id, username, role, is_premium, premium_until "
@@ -156,10 +153,6 @@ def set_role_by_telegram_id(telegram_id: int, role: str) -> None:
         conn.close()
 
 
-# ==================================================
-# PREMIUM
-# ==================================================
-
 def is_user_premium(telegram_id: int) -> bool:
     user = get_user(telegram_id)
     if not user:
@@ -204,10 +197,6 @@ def update_premium_until(telegram_id: int, premium_until: datetime) -> None:
 
 
 def give_premium_days(telegram_id: int, days: int) -> None:
-    """
-    LEGACY API
-    Используется в handlers/role_actions.py
-    """
     new_until = datetime.utcnow() + timedelta(days=days)
     update_premium_until(telegram_id, new_until)
 
