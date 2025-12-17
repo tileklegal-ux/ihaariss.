@@ -47,16 +47,11 @@ from handlers.user_helpers import (
     insights_bridge_text,
 )
 
-# ✅ ЕДИНСТВЕННЫЙ "владелец" личного кабинета и экспорта — handlers/profile.py
 from handlers.profile import on_profile, on_export_excel, on_export_pdf
-
-# ✅ ДОБАВЛЕНО: юридические документы
 from handlers.documents import on_documents
 
 from services.openai_client import ask_openai
-from database.db import is_user_premium
-# ✅ ДОБАВЛЕНО РАНЕЕ (и теперь ИСПОЛЬЗУЕМ): роль пользователя
-from database.db import get_user_role
+from database.db import is_user_premium, get_user_role
 
 logger = logging.getLogger(__name__)
 
@@ -84,11 +79,8 @@ TA_RESOURCE = "ta_resource"
 
 NS_STEP_KEY = "ns_step"
 
-# премиум-флаг, который читает profile.py
 PREMIUM_KEY = "is_premium"
-AI_CHAT_MODE_KEY = "ai_chat_mode"  # Используем для изоляции режима
-
-# onboarding-flag для фикса первого шага
+AI_CHAT_MODE_KEY = "ai_chat_mode"
 ONBOARDING_KEY = "onboarding"
 
 # =============================
@@ -97,19 +89,17 @@ ONBOARDING_KEY = "onboarding"
 
 async def cmd_start_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
-    context.user_data.pop(AI_CHAT_MODE_KEY, None)  # Очищаем режим при старте
+    context.user_data.pop(AI_CHAT_MODE_KEY, None)
 
     if "lang" not in context.user_data:
         context.user_data["lang"] = "ru"
 
-    # фиксируем, что пользователь в онбординге
     context.user_data[ONBOARDING_KEY] = True
 
     user = update.effective_user
     name = user.first_name or user.username or "друг"
     lang = context.user_data["lang"]
 
-    # Ваш оригинальный текст с дисклеймером
     text = (
         f"Привет, {name}! 👋\n\n"
         "Я — AI-ассистент для анализа ниши и товаров.\n"
@@ -217,7 +207,6 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if step == 5:
         context.user_data["pm_profitability"] = text
 
-        # Формируем инсайт
         insights = (
             "📊 Анализ прибыли и денег:\n\n"
             f"Тип бизнеса: {context.user_data.get('pm_type', '')}\n"
@@ -348,6 +337,7 @@ async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         clear_fsm(context)
         await update.message.reply_text("📊 Бизнес-анализ", reply_markup=business_hub_keyboard())
+        return
 
 
 # =============================
@@ -445,6 +435,7 @@ async def ta_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         clear_fsm(context)
         await update.message.reply_text("📊 Бизнес-анализ", reply_markup=business_hub_keyboard())
+        return
 
 
 # =============================
@@ -614,9 +605,10 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.exception("get_user_role failed in user.text_router")
         return
 
-    # РАННИЙ ВЫХОД для owner/manager
-    if role != "user":
-        return
+    # ВАЖНО: если пользователь owner или manager - не обрабатываем его сообщения здесь
+    # Они будут обработаны в соответствующих хендлерах (owner.py, manager.py)
+    if role in ("owner", "manager"):
+        return  # Передаем управление owner/manager хендлерам
 
     # 1) Режим AI-чата
     if context.user_data.get(AI_CHAT_MODE_KEY):
