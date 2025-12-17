@@ -37,7 +37,6 @@ def main_menu_keyboard():
             # 🔝 Самое важное — наверху
             [KeyboardButton(BTN_BIZ), KeyboardButton(BTN_AI_CHAT)],
 
-            [KeyboardButton(BTN_ANALYSIS), KeyboardButton(BTN_NICHE)],
             [KeyboardButton(BTN_PROFILE)],
             [KeyboardButton(BTN_DOCS)],
             [KeyboardButton(BTN_PREMIUM)],
@@ -50,6 +49,7 @@ def business_hub_keyboard():
     return ReplyKeyboardMarkup(
         [
             [KeyboardButton(BTN_PM), KeyboardButton(BTN_GROWTH)],
+            [KeyboardButton(BTN_ANALYSIS), KeyboardButton(BTN_NICHE)],
             [KeyboardButton(BTN_BACK)],
         ],
         resize_keyboard=True,
@@ -67,10 +67,9 @@ def growth_channels_keyboard():
     )
 
 
-def step_keyboard(options):
+def step_keyboard():
     return ReplyKeyboardMarkup(
-        [[KeyboardButton(opt)] for opt in options]
-        + [[KeyboardButton(BTN_BACK)]],
+        [[KeyboardButton(BTN_BACK)]],
         resize_keyboard=True,
     )
 
