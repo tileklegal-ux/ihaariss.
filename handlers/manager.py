@@ -1,4 +1,4 @@
-# handlers/manager.py - нужно создать или обновить
+# handlers/manager.py
 
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ContextTypes, MessageHandler, filters
@@ -57,5 +57,5 @@ async def manager_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE
 def register_handlers_manager(app):
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, manager_text_router),
-        group=3,  # Group 3 после owner (group 2)
+        group=3,
     )
