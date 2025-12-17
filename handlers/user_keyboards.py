@@ -36,6 +36,7 @@ def main_menu_keyboard():
         [
             # 🔝 Самое важное — наверху
             [KeyboardButton(BTN_BIZ), KeyboardButton(BTN_AI_CHAT)],
+            [KeyboardButton(BTN_ANALYSIS), KeyboardButton(BTN_NICHE)],
             [KeyboardButton(BTN_PROFILE)],
             [KeyboardButton(BTN_DOCS)],
             [KeyboardButton(BTN_PREMIUM)],
@@ -48,7 +49,6 @@ def business_hub_keyboard():
     return ReplyKeyboardMarkup(
         [
             [KeyboardButton(BTN_PM), KeyboardButton(BTN_GROWTH)],
-            [KeyboardButton(BTN_ANALYSIS), KeyboardButton(BTN_NICHE)],
             [KeyboardButton(BTN_BACK)],
         ],
         resize_keyboard=True,
