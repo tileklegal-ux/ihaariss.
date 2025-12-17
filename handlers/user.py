@@ -34,6 +34,7 @@ from handlers.user_keyboards import (
     BTN_PROFILE,
     BTN_PREMIUM,
     BTN_PREMIUM_BENEFITS,
+    BTN_BIZ,
 )
 
 from handlers.user_texts import t
@@ -44,7 +45,7 @@ from handlers.user_helpers import (
     insights_bridge_text,
 )
 
-# ✅ ЕДИНСТВЕННЫЙ “владелец” личного кабинета и экспорта — handlers/profile.py
+# ✅ ЕДИНСТВЕННЫЙ "владелец" личного кабинета и экспорта — handlers/profile.py
 from handlers.profile import on_profile, on_export_excel, on_export_pdf
 
 # ✅ ДОБАВЛЕНО: юридические документы
@@ -557,8 +558,8 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.exception("get_user_role failed in user.text_router")
         return
 
+    # РАННИЙ ВЫХОД для owner/manager
     if role != "user":
-        # Если это владелец или менеджер — здесь может быть их логика
         return
 
     # 1) Режим AI-чата
@@ -605,8 +606,23 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await on_export_pdf(update, context)
         return
 
-    # 7) Кнопка НАЗАД (глобальная)
+    # 7) Кнопка НАЗАД (глобальная) - ВАЖНО: обработка для non-premium AI-chat
     if text == BTN_BACK:
+        # Специальная обработка для возврата после отказа в AI-чате
+        if not is_user_premium(update.effective_user.id) and not any([
+            context.user_data.get(PM_STATE_KEY),
+            context.user_data.get(GROWTH_KEY),
+            context.user_data.get(TA_STATE_KEY),
+            context.user_data.get(NS_STEP_KEY),
+            context.user_data.get(AI_CHAT_MODE_KEY)
+        ]):
+            # Если пользователь non-premium и не в FSM - возвращаем в меню
+            clear_fsm(context)
+            lang = context.user_data.get("lang", "ru")
+            await update.message.reply_text(t(lang, "choose_section"), reply_markup=main_menu_keyboard())
+            return
+
+        # Обычная логика возврата из FSM
         if context.user_data.get(PM_STATE_KEY) or \
            context.user_data.get(GROWTH_KEY) or \
            context.user_data.get(TA_STATE_KEY) or \
@@ -618,7 +634,8 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Иначе в главное меню
         clear_fsm(context)
-        await update.message.reply_text("Главное меню", reply_markup=main_menu_keyboard())
+        lang = context.user_data.get("lang", "ru")
+        await update.message.reply_text(t(lang, "choose_section"), reply_markup=main_menu_keyboard())
         return
 
     # 8) Активные FSM
@@ -635,22 +652,12 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await ns_handler(update, context)
         return
 
-    # 9) Кнопки переходов (Главное меню)
-    if text == BTN_PM:
+    # 9) Кнопки переходов (Главное меню) - ТОЛЬКО ПЕРВЫЙ УРОВЕНЬ
+    if text == BTN_BIZ:
         await on_business_analysis(update, context)
-        await pm_start(update, context)
         return
-    if text == BTN_GROWTH:
-        await on_business_analysis(update, context)
-        await growth_start(update, context)
-        return
-    if text == BTN_ANALYSIS:
-        await on_business_analysis(update, context)
-        await ta_start(update, context)
-        return
-    if text == BTN_NICHE:
-        await on_business_analysis(update, context)
-        await ns_start(update, context)
+    if text == BTN_AI_CHAT:
+        await enter_ai_chat(update, context)
         return
     if text == BTN_PROFILE:
         await on_profile(update, context)
@@ -658,8 +665,28 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == BTN_PREMIUM:
         await premium_start(update, context)
         return
+    if text == BTN_ANALYSIS or text == BTN_NICHE:
+        # Эти кнопки должны быть удалены из main_menu_keyboard
+        # Но на случай, если они остались - показываем бизнес-хаб
+        await on_business_analysis(update, context)
+        return
+
+    # 10) Кнопки ПОДМЕНЮ "Бизнес-анализ"
+    if text == BTN_PM:
+        await pm_start(update, context)
+        return
+    if text == BTN_GROWTH:
+        await growth_start(update, context)
+        return
+    if text == BTN_ANALYSIS:
+        await ta_start(update, context)
+        return
+    if text == BTN_NICHE:
+        await ns_start(update, context)
+        return
 
     # Если ничего не подошло
+    clear_fsm(context)
     lang = context.user_data.get("lang", "ru")
     await update.message.reply_text(t(lang, "choose_section"), reply_markup=main_menu_keyboard())
 
