@@ -38,7 +38,8 @@ async def add_manager(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data[EXPECTING_USERNAME] = True
     
     await update.message.reply_text(
-        "Укажите username пользователя (без @), которого нужно сделать менеджером:"
+        "Укажите username пользователя (без @), которого нужно сделать менеджером:\n\n"
+        "Пример: Artbazar_support"
     )
 
 
@@ -72,8 +73,11 @@ async def add_manager_username_handler(update: Update, context: ContextTypes.DEF
     
     if not user:
         await update.message.reply_text(
-            f"❌ Пользователь @{username} не найден.\n"
-            "Убедитесь, что пользователь уже начал диалог с ботом.\n\n"
+            f"❌ Пользователь @{username} не найден.\n\n"
+            "Возможные причины:\n"
+            "1. Username введен с ошибкой\n"
+            "2. Пользователь еще не начал диалог с ботом\n"
+            "3. У пользователя не указан username в Telegram\n\n"
             "Попробуйте снова или нажмите 'Назад'."
         )
         return
