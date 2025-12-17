@@ -106,8 +106,17 @@ async def cmd_start_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = user.first_name or user.username or "друг"
     lang = context.user_data["lang"]
 
+    text = t(lang, "hello") or ""
+text = text.strip()
+
+if not text:
+    text = "Привет, {name}! 👋"
+
+text = text.format(name=name)
+
+if update.message:
     await update.message.reply_text(
-        t(lang, "hello").format(name=name),
+        text,
         reply_markup=ReplyKeyboardMarkup(
             [[KeyboardButton(BTN_YES), KeyboardButton(BTN_NO)]],
             resize_keyboard=True,
