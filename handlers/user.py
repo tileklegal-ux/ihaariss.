@@ -12,7 +12,7 @@ from telegram.ext import (
     ContextTypes,
     MessageHandler,
     filters,
-    Application,  # <--- Обязательный импорт для register_handlers_user
+    Application,
 )
 
 from handlers.user_keyboards import (
@@ -107,21 +107,21 @@ async def cmd_start_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data["lang"]
 
     text = t(lang, "hello") or ""
-text = text.strip()
+    text = text.strip()
 
-if not text:
-    text = "Привет, {name}! 👋"
+    if not text:
+        text = f"Привет, {name}! 👋"
+    else:
+        text = text.format(name=name)
 
-text = text.format(name=name)
-
-if update.message:
-    await update.message.reply_text(
-        text,
-        reply_markup=ReplyKeyboardMarkup(
-            [[KeyboardButton(BTN_YES), KeyboardButton(BTN_NO)]],
-            resize_keyboard=True,
-        ),
-    )
+    if update.message:
+        await update.message.reply_text(
+            text,
+            reply_markup=ReplyKeyboardMarkup(
+                [[KeyboardButton(BTN_YES), KeyboardButton(BTN_NO)]],
+                resize_keyboard=True,
+            ),
+        )
 
 
 async def on_yes(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -253,7 +253,6 @@ async def growth_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = context.user_data.get("lang", "ru")
     text = (update.message.text or "").strip()
 
     if text == BTN_BACK:
@@ -516,10 +515,7 @@ async def premium_benefits(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def ai_chat_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = (update.message.text or "").strip()
 
-    if not user_text:
-        return
-
-    if user_text.startswith("/"):
+    if not user_text or user_text.startswith("/"):
         return
 
     if not is_user_premium(update.effective_user.id):
@@ -550,11 +546,9 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text or ""
     text = user_text
 
-    # команды не обрабатываем здесь
     if user_text.startswith("/"):
         return
 
-    # 🔒 ЖЁСТКАЯ ИЗОЛЯЦИЯ РОЛЕЙ: этот файл обслуживает ТОЛЬКО role == "user"
     try:
         role = get_user_role(update.effective_user.id)
     except Exception:
@@ -564,12 +558,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if role != "user":
         return
 
-
-    # =========================
-    # AI-CHAT MODE (Premium) — перехватывает только текст; кнопки/команды игнорируются
-    # =========================
     if context.user_data.get(AI_CHAT_MODE_KEY):
-        # выход из режима
         if text in (BTN_BACK, BTN_EXIT_CHAT):
             context.user_data.pop(AI_CHAT_MODE_KEY, None)
             clear_fsm(context)
@@ -580,10 +569,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await ai_chat_text_handler(update, context)
         return
 
-
-    # =========================
-    # КНОПКИ
-    # =========================
     if text == BTN_AI_CHAT:
         await enter_ai_chat(update, context)
         return
@@ -600,12 +585,10 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await on_documents(update, context)
         return
 
-    # Premium benefits
     if text == BTN_PREMIUM_BENEFITS:
         await premium_benefits(update, context)
         return
 
-    # Экспорт (Premium кабинет)
     if text == "📊 Скачать Excel":
         await on_export_excel(update, context)
         return
@@ -614,18 +597,10 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await on_export_pdf(update, context)
         return
 
-    # Back (везде)
     if text == BTN_BACK:
-        # Выход из режима AI-чата (не должен ломать кнопки/FSM)
-        if context.user_data.get(AI_CHAT_MODE_KEY):
-            context.user_data.pop(AI_CHAT_MODE_KEY, None)
+        if context.user_data.get(PM_STATE_KEY) or context.user_data.get(GROWTH_KEY) or \
+           context.user_data.get(TA_STATE_KEY) or context.user_data.get(NS_STEP_KEY):
             clear_fsm(context)
-            await update.message.reply_text("Главное меню", reply_markup=main_menu_keyboard())
-            return
-
-        if context.user_data.get(PM_STATE_KEY) or context.user_data.get(GROWTH_KEY) or context.user_data.get(TA_STATE_KEY) or context.user_data.get(NS_STEP_KEY):
-            clear_fsm(context)
-            # Возврат в хаб, если был активен любой FSM бизнес-анализа
             await update.message.reply_text("📊 Бизнес-анализ", reply_markup=business_hub_keyboard())
             return
 
@@ -633,7 +608,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Главное меню", reply_markup=main_menu_keyboard())
         return
 
-    # FSM приоритеты
     if context.user_data.get(PM_STATE_KEY):
         await pm_handler(update, context)
         return
@@ -647,7 +621,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await ns_handler(update, context)
         return
 
-    # Главное меню
     if text == BTN_PM:
         await on_business_analysis(update, context)
         await pm_start(update, context)
@@ -671,7 +644,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await premium_start(update, context)
         return
 
-    # fallback: просто повторить меню
     lang = context.user_data.get("lang", "ru")
     await update.message.reply_text(t(lang, "choose_section"), reply_markup=main_menu_keyboard())
 
@@ -679,7 +651,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def enter_ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
 
-    # Non-premium: короткое сообщение + кнопка "Назад", чтобы не застрять
     if not is_user_premium(update.effective_user.id):
         context.user_data.pop(AI_CHAT_MODE_KEY, None)
         await update.message.reply_text(
@@ -688,7 +659,6 @@ async def enter_ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Premium: сразу в режим чата
     context.user_data[AI_CHAT_MODE_KEY] = True
     await update.message.reply_text(
         "💬 **AI Чат (Premium)**\n\n"
@@ -704,14 +674,6 @@ async def show_documents(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def register_handlers_user(app: Application):
-    """
-    Регистрирует пользовательский текстовый роутер.
-
-    ВАЖНО:
-    - Один MessageHandler на текст.
-    - AI-чат — режим внутри text_router (изоляция без конфликтов с меню/FSM).
-    - Порядок по группам: /start (0), owner (1..2), manager (1..3), user (4).
-    """
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, text_router),
         group=4,
