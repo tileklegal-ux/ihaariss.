@@ -1,4 +1,4 @@
-# handlers/owner.py
+# handlers/owner.py (ПОЛНЫЙ ИСПРАВЛЕННЫЙ ФАЙЛ)
 
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ContextTypes, MessageHandler, filters
@@ -68,5 +68,5 @@ async def owner_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def register_handlers_owner(app):
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, owner_text_router),
-        group=1,
+        group=2,  # ВТОРАЯ группа - после FSM
     )
