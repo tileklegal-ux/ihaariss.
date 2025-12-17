@@ -1,6 +1,5 @@
 import os
 import sqlite3
-from datetime import datetime, timedelta
 import psycopg2
 
 SQLITE_DB_PATH = os.getenv("SQLITE_DB_PATH", "database/artbazar.db")
@@ -18,19 +17,19 @@ def get_connection():
     return sqlite3.connect(SQLITE_DB_PATH)
 
 
-def get_user_role(user_id: int) -> str:
+def get_user_role(telegram_id: int) -> str:
     conn = get_connection()
     try:
         cur = conn.cursor()
         if _is_postgres():
             cur.execute(
-                "SELECT role FROM users WHERE user_id = %s",
-                (user_id,)
+                "SELECT role FROM users WHERE telegram_id = %s",
+                (telegram_id,),
             )
         else:
             cur.execute(
-                "SELECT role FROM users WHERE user_id = ?",
-                (user_id,)
+                "SELECT role FROM users WHERE telegram_id = ?",
+                (telegram_id,),
             )
         row = cur.fetchone()
         return row[0] if row else "user"
