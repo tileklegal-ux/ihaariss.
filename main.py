@@ -8,6 +8,7 @@ from database.db import get_user_role
 from handlers.user import cmd_start_user, register_handlers_user
 from handlers.owner import owner_start, register_handlers_owner
 from handlers.manager import manager_start, register_handlers_manager
+from handlers.role_actions import register_role_actions  # ДОБАВИТЬ
 
 
 logging.basicConfig(
@@ -38,9 +39,10 @@ def main():
     app.add_handler(CommandHandler("start", start_router), group=0)
 
     # РОЛЕВЫЕ HANDLERS БЕЗ /start
-    register_handlers_owner(app)    # group 1
-    register_handlers_manager(app)  # group 2
-    register_handlers_user(app)     # group 4
+    register_handlers_owner(app)      # group 1
+    register_handlers_manager(app)    # group 2
+    register_role_actions(app)        # ДОБАВИТЬ: group 2 (FSM для ролей)
+    register_handlers_user(app)       # group 4
 
     app.run_polling()
 
