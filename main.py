@@ -1,56 +1,54 @@
 import logging
 from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    MessageHandler,
-    ContextTypes,
-    filters,
-)
+from telegram.ext import Application, CommandHandler, ContextTypes
 
-from database.db import ensure_user_exists, get_user_role
+from config import TELEGRAM_TOKEN
+from database.db import get_user_role, ensure_user_exists
+
+from handlers.user import cmd_start_user, register_handlers_user
 from handlers.owner import owner_start, register_handlers_owner
-from handlers.user import handle_user_message  # <-- ВАЖНО
+from handlers.manager import manager_start, register_handlers_manager
+# УБРАТЬ проблемный импорт
+# from handlers.role_actions import register_role_actions
 
 
-TOKEN = "ТВОЙ_TOKEN"
-
-OWNER_ID = 1974482384
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 
 
 async def start_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    telegram_id = user.id
-    username = user.username
+    user_id = update.effective_user.id
+    username = update.effective_user.username
+    
+    # Сохраняем/обновляем пользователя в БД
+    ensure_user_exists(user_id, username)
+    
+    role = get_user_role(user_id)
 
-    ensure_user_exists(telegram_id, username)
-
-    role = get_user_role(telegram_id)
-
-    if telegram_id == OWNER_ID or role == "owner":
+    if role == "owner":
         await owner_start(update, context)
         return
 
-    await update.message.reply_text(
-        "Привет! Напиши сообщение, и я помогу 👇"
-    )
+    if role == "manager":
+        await manager_start(update, context)
+        return
+
+    await cmd_start_user(update, context)
 
 
 def main():
-    app = ApplicationBuilder().token(TOKEN).build()
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
 
+    # ЕДИНСТВЕННЫЙ /start ВО ВСЁМ ПРОЕКТЕ
     app.add_handler(CommandHandler("start", start_router), group=0)
 
-    # ВСЕ пользовательские сообщения → существующий handler
-    app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_message),
-        group=1,
-    )
-
-    register_handlers_owner(app)
+    # РОЛЕВЫЕ HANDLERS БЕЗ /start - НОВЫЙ ПОРЯДОК
+    # УБРАТЬ: register_role_actions(app)        # group 1 - СНАЧАЛА FSM состояния
+    register_handlers_owner(app)      # group 2 - ПОТОМ кнопки владельца  
+    register_handlers_manager(app)    # group 3 - ПОТОМ кнопки менеджера
+    register_handlers_user(app)       # group 4 - ПОСЛЕДНИЙ обычный пользователь
 
     app.run_polling()
 
