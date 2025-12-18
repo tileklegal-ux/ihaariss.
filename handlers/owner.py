@@ -1,13 +1,12 @@
+# handlers/owner.py
+
 from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ContextTypes, MessageHandler, filters
+from telegram.ext import ContextTypes, MessageHandler, filters, Application
 
 from handlers.owner_stats import show_owner_stats
 from handlers.role_actions import add_manager, remove_manager
 
 
-# =========================
-# КЛАВИАТУРА OWNER
-# =========================
 OWNER_KEYBOARD = ReplyKeyboardMarkup(
     [
         ["📊 Общая статистика"],
@@ -18,19 +17,13 @@ OWNER_KEYBOARD = ReplyKeyboardMarkup(
 )
 
 
-# =========================
-# START OWNER
-# =========================
 async def owner_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "👑 Панель владельца\n\nВыберите действие:",
+        "👑 Панель владельца",
         reply_markup=OWNER_KEYBOARD,
     )
 
 
-# =========================
-# TEXT ROUTER OWNER
-# =========================
 async def owner_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
@@ -51,11 +44,8 @@ async def owner_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
 
-# =========================
-# REGISTER OWNER HANDLERS
-# =========================
-def register_owner_handlers(application):
-    application.add_handler(
+def register_owner_handlers(app: Application):
+    app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, owner_text_router),
-        group=1,  # ❗ ВАЖНО: owner > manager > user
+        group=1,
     )
