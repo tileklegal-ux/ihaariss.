@@ -1,10 +1,9 @@
 from telegram import Update
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, CommandHandler
 
 from database.db import get_user_role
 from handlers.owner import owner_start
 from handlers.manager import manager_start
-from handlers.user import user_start
 
 
 async def start_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -19,4 +18,11 @@ async def start_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await manager_start(update, context)
         return
 
-    await user_start(update, context)
+    # обычный пользователь
+    await update.message.reply_text(
+        "Привет! 👋\n\nВыбери действие в меню ⬇️"
+    )
+
+
+def register_start_handlers(app):
+    app.add_handler(CommandHandler("start", start_router))
