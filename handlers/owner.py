@@ -1,67 +1,44 @@
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import ContextTypes, MessageHandler, filters
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 
-from database.db import get_user_role
 from handlers.owner_stats import show_owner_stats
-
-
-BTN_OWNER_STATS = "📊 Общая статистика"
-BTN_ADD_MANAGER = "➕ Добавить менеджера"
-BTN_REMOVE_MANAGER = "➖ Удалить менеджера"
-BTN_EXIT = "⬅️ Выйти"
-
-
-def owner_keyboard():
-    return ReplyKeyboardMarkup(
-        [
-            [KeyboardButton(BTN_OWNER_STATS)],
-            [KeyboardButton(BTN_ADD_MANAGER), KeyboardButton(BTN_REMOVE_MANAGER)],
-            [KeyboardButton(BTN_EXIT)],
-        ],
-        resize_keyboard=True,
-    )
+from handlers.role_actions import add_manager, remove_manager
+from database.db import get_user_role
 
 
 async def owner_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    role = get_user_role(update.effective_user.id)
-    if role != "owner":
+    user = update.effective_user
+
+    if get_user_role(user.id) != "owner":
+        await update.message.reply_text("❌ Доступ только для владельца.")
         return
+
+    keyboard = [
+        [InlineKeyboardButton("📊 Статистика", callback_data="owner_stats")],
+        [InlineKeyboardButton("➕ Добавить менеджера", callback_data="add_manager")],
+        [InlineKeyboardButton("➖ Удалить менеджера", callback_data="remove_manager")],
+    ]
 
     await update.message.reply_text(
-        "👑 Панель владельца\n\n"
-        "Доступ:\n"
-        "• Общая статистика\n"
-        "• Управление менеджерами (скоро)",
-        reply_markup=owner_keyboard(),
+        "👑 Панель владельца",
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 
-async def owner_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    role = get_user_role(update.effective_user.id)
-    if role != "owner":
-        return
+async def owner_callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
 
-    text = update.message.text or ""
-
-    if text == BTN_OWNER_STATS:
+    if query.data == "owner_stats":
         await show_owner_stats(update, context)
-        return
 
-    if text in (BTN_ADD_MANAGER, BTN_REMOVE_MANAGER):
-        await update.message.reply_text(
-            "⚠️ Управление менеджерами временно недоступно.",
-            reply_markup=owner_keyboard()
-        )
-        return
+    elif query.data == "add_manager":
+        await add_manager(update, context)
 
-    if text == BTN_EXIT:
-        context.user_data.clear()
-        await update.message.reply_text("Выход из панели владельца.")
-        return
+    elif query.data == "remove_manager":
+        await remove_manager(update, context)
 
 
-def register_handlers_owner(app):
-    app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, owner_text_router),
-        group=2,
-    )
+def register_handlers_owner(application):
+    application.add_handler(CommandHandler("owner", owner_start))
+    application.add_handler(CallbackQueryHandler(owner_callback_router, pattern="^owner_|^add_manager|^remove_manager"))
