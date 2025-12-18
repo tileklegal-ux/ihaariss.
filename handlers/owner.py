@@ -35,19 +35,34 @@ async def owner_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if text == "➕ Добавить менеджера":
-        context.user_data["await_username"] = "add"
-        await update.message.reply_text("Введи username менеджера (@username)")
+        context.user_data["await_action"] = "add_manager"
+        await update.message.reply_text(
+            "➕ Добавление менеджера\n\n"
+            "Отправь Telegram ID пользователя, которого нужно сделать менеджером.\n\n"
+            "Как узнать Telegram ID:\n"
+            "1️⃣ Напиши боту @userinfobot\n"
+            "2️⃣ Скопируй ID\n"
+            "3️⃣ Пришли сюда числом"
+        )
         return
 
     if text == "➖ Удалить менеджера":
-        context.user_data["await_username"] = "remove"
-        await update.message.reply_text("Введи username менеджера (@username)")
+        context.user_data["await_action"] = "remove_manager"
+        await update.message.reply_text(
+            "➖ Удаление менеджера\n\n"
+            "Отправь Telegram ID менеджера, которого нужно удалить.\n\n"
+            "Telegram ID — это число."
+        )
         return
 
     if text == "⬅️ Выйти":
+        context.user_data.clear()
         await update.message.reply_text("Выход из панели владельца")
         return
 
 
 def register_owner_handlers(app):
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, owner_text_router), group=1)
+    app.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, owner_text_router),
+        group=1,
+    )
