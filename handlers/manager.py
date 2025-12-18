@@ -84,7 +84,6 @@ async def manager_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text("❌ Срок должен быть больше 0.")
             return
 
-        # ensure user exists
         ensure_user_exists(tg_id)
 
         premium_until = int(
@@ -95,14 +94,12 @@ async def manager_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         context.user_data.clear()
 
-        # ✅ notify manager
         await update.message.reply_text(
             f"✅ Premium активирован\n\n"
             f"👤 Пользователь: {tg_id}\n"
             f"⏳ Срок: {days} дней"
         )
 
-        # ✅ notify user
         try:
             await context.bot.send_message(
                 chat_id=tg_id,
@@ -114,7 +111,6 @@ async def manager_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE
                 ),
             )
         except Exception:
-            # пользователь мог не писать боту — это нормально
             pass
 
         return
@@ -123,5 +119,5 @@ async def manager_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE
 def register_manager_handlers(app):
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, manager_text_router),
-        group=1,
+        group=0,
     )
