@@ -30,8 +30,13 @@ async def manager_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     text = (update.message.text or "").strip()
 
+    # ─────────────────────────────
+    # START PREMIUM FLOW
+    # ─────────────────────────────
     if text == "⭐ Активировать Premium":
+        context.user_data.clear()
         context.user_data["await_premium"] = True
+
         await update.message.reply_text(
             "⭐ Активация Premium\n\n"
             "Отправь сообщение в формате:\n"
@@ -48,10 +53,13 @@ async def manager_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     if text == "⬅️ Выйти":
-        context.user_data.pop("await_premium", None)
+        context.user_data.clear()
         await update.message.reply_text("Выход из панели менеджера")
         return
 
+    # ─────────────────────────────
+    # HANDLE PREMIUM ACTIVATION
+    # ─────────────────────────────
     if context.user_data.get("await_premium"):
         parts = text.split()
 
@@ -61,36 +69,54 @@ async def manager_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
             return
 
-        user_id_part, days_part = parts
+        tg_id, days = parts
 
-        if not user_id_part.isdigit() or not days_part.isdigit():
+        if not tg_id.isdigit() or not days.isdigit():
             await update.message.reply_text(
                 "❌ Telegram ID и срок должны быть числами."
             )
             return
 
-        target_id = int(user_id_part)
-        days = int(days_part)
+        tg_id = int(tg_id)
+        days = int(days)
 
         if days <= 0:
             await update.message.reply_text("❌ Срок должен быть больше 0.")
             return
 
-        ensure_user_exists(target_id)
+        # ensure user exists
+        ensure_user_exists(tg_id)
 
         premium_until = int(
             (datetime.now(timezone.utc) + timedelta(days=days)).timestamp()
         )
 
-        set_premium_until(target_id, premium_until)
+        set_premium_until(tg_id, premium_until)
 
-        context.user_data.pop("await_premium", None)
+        context.user_data.clear()
 
+        # ✅ notify manager
         await update.message.reply_text(
-            f"✅ Premium активирован\n"
-            f"Telegram ID: {target_id}\n"
-            f"Срок: {days} дней"
+            f"✅ Premium активирован\n\n"
+            f"👤 Пользователь: {tg_id}\n"
+            f"⏳ Срок: {days} дней"
         )
+
+        # ✅ notify user
+        try:
+            await context.bot.send_message(
+                chat_id=tg_id,
+                text=(
+                    "🎉 Поздравляем!\n\n"
+                    "Ваш Premium доступ активирован ✨\n\n"
+                    f"⏳ Срок действия: {days} дней\n\n"
+                    "Теперь вам доступны расширенные функции бота 🚀"
+                ),
+            )
+        except Exception:
+            # пользователь мог не писать боту — это нормально
+            pass
+
         return
 
 
