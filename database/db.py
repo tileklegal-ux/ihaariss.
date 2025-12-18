@@ -1,4 +1,5 @@
 import sqlite3
+import time
 from contextlib import closing
 
 DB_PATH = "database.db"
@@ -52,3 +53,22 @@ def set_user_role(user_id: int, role: str):
         ON CONFLICT(user_id) DO UPDATE SET role = excluded.role
         """, (user_id, role))
         conn.commit()
+
+
+# ✅ ВОТ ТО, ЧЕГО НЕ ХВАТАЛО
+def is_user_premium(user_id: int) -> bool:
+    now = int(time.time())
+
+    with closing(get_connection()) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT premium_until FROM users WHERE user_id = ?",
+            (user_id,),
+        )
+        row = cur.fetchone()
+
+    if not row:
+        return False
+
+    premium_until = row[0] or 0
+    return premium_until > now
