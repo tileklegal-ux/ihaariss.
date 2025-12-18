@@ -1,22 +1,18 @@
+# handlers/start.py
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
 
-from database.db import get_user_role, ensure_user_exists
+from database.db import ensure_user_exists, get_user_role
 from handlers.owner import owner_start
 from handlers.manager import manager_start
-from handlers.user import user_start
+from handlers.user import cmd_start_user
 
 
 async def start_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
+    u = update.effective_user
+    ensure_user_exists(u.id, u.username or "")
 
-    # гарантируем пользователя в БД
-    ensure_user_exists(
-        user.id,
-        user.username,
-    )
-
-    role = get_user_role(user.id)
+    role = get_user_role(u.id)
 
     if role == "owner":
         await owner_start(update, context)
@@ -26,7 +22,7 @@ async def start_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await manager_start(update, context)
         return
 
-    await user_start(update, context)
+    await cmd_start_user(update, context)
 
 
 def register_start_handlers(app):
