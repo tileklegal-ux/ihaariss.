@@ -71,3 +71,6 @@ def is_user_premium(telegram_id: int) -> bool:
     conn.close()
 
     return bool(row and row[0])
+    # --- alias for backward compatibility ---
+def get_connection():
+    return get_db_connection()
