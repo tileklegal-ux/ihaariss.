@@ -1,31 +1,28 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from database.db import get_user_role
-from services.audit_log import log_event
+from database.db import get_user_role, get_connection
 
 
 async def show_owner_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
+    role = get_user_role(update.effective_user.id)
 
-    # защита: только owner
-    role = get_user_role(user.id)
     if role != "owner":
-        await update.message.reply_text("❌ Доступ только для владельца.")
+        await update.message.reply_text("Нет доступа.")
         return
 
-    # тут пока заглушка, ты дальше сам расширишь статистику
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM users")
+        total_users = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM users WHERE role = 'manager'")
+        managers = cur.fetchone()[0]
+
     text = (
-        "📊 Статистика владельца\n\n"
-        "— Пользователи: в разработке\n"
-        "— Премиум: в разработке\n"
-        "— Запросы: в разработке"
+        f"📊 Статистика:\n"
+        f"Всего пользователей: {total_users}\n"
+        f"Менеджеров: {managers}"
     )
 
     await update.message.reply_text(text)
-
-    log_event(
-        user_id=user.id,
-        action="owner_stats_opened",
-        details="Owner opened statistics panel"
-    )
