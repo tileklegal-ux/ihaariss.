@@ -31,40 +31,65 @@ async def manager_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE
     text = (update.message.text or "").strip()
 
     if text == "⭐ Активировать Premium":
-        context.user_data["await_premium_id"] = True
+        context.user_data["await_premium"] = True
         await update.message.reply_text(
             "⭐ Активация Premium\n\n"
-            "Отправь Telegram ID пользователя, которому нужно активировать Premium.\n\n"
+            "Отправь сообщение в формате:\n"
+            "TELEGRAM_ID ДНИ\n\n"
+            "Примеры:\n"
+            "6444576072 30\n"
+            "6444576072 180\n"
+            "6444576072 365\n\n"
             "Как узнать Telegram ID:\n"
             "1️⃣ Напиши боту @userinfobot\n"
             "2️⃣ Скопируй ID\n"
-            "3️⃣ Пришли сюда числом"
+            "3️⃣ Пришли сюда"
         )
         return
 
     if text == "⬅️ Выйти":
-        context.user_data.pop("await_premium_id", None)
+        context.user_data.pop("await_premium", None)
         await update.message.reply_text("Выход из панели менеджера")
         return
 
-    if context.user_data.get("await_premium_id"):
-        if not text.isdigit():
-            await update.message.reply_text("❌ Пришли Telegram ID числом.")
+    if context.user_data.get("await_premium"):
+        parts = text.split()
+
+        if len(parts) != 2:
+            await update.message.reply_text(
+                "❌ Неверный формат.\nИспользуй: TELEGRAM_ID ДНИ"
+            )
             return
 
-        target_id = int(text)
+        user_id_part, days_part = parts
+
+        if not user_id_part.isdigit() or not days_part.isdigit():
+            await update.message.reply_text(
+                "❌ Telegram ID и срок должны быть числами."
+            )
+            return
+
+        target_id = int(user_id_part)
+        days = int(days_part)
+
+        if days <= 0:
+            await update.message.reply_text("❌ Срок должен быть больше 0.")
+            return
 
         ensure_user_exists(target_id)
 
         premium_until = int(
-            (datetime.now(timezone.utc) + timedelta(days=30)).timestamp()
+            (datetime.now(timezone.utc) + timedelta(days=days)).timestamp()
         )
 
         set_premium_until(target_id, premium_until)
 
-        context.user_data.pop("await_premium_id", None)
+        context.user_data.pop("await_premium", None)
+
         await update.message.reply_text(
-            f"✅ Premium активирован.\nTelegram ID: {target_id}\nСрок: 30 дней"
+            f"✅ Premium активирован\n"
+            f"Telegram ID: {target_id}\n"
+            f"Срок: {days} дней"
         )
         return
 
