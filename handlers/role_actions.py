@@ -1,22 +1,29 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from database.db import ensure_user_exists, set_user_role
+from database.db import (
+    ensure_user_exists,
+    set_user_role,
+    get_user_role,
+)
 
 
 async def add_manager(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Ожидает Telegram ID менеджера обычным числом.
+    """
     text = update.message.text.strip()
 
     if not text.isdigit():
         await update.message.reply_text(
-            "❌ Нужно отправить Telegram ID числом."
+            "❌ Telegram ID должен быть числом."
         )
         return
 
     manager_id = int(text)
 
-    # гарантируем, что пользователь есть в БД
-    ensure_user_exists(user_id=manager_id)
+    # создаём пользователя, если его ещё нет
+    ensure_user_exists(manager_id)
 
     # назначаем роль
     set_user_role(manager_id, "manager")
@@ -25,21 +32,35 @@ async def add_manager(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"✅ Пользователь с ID {manager_id} назначен менеджером."
     )
 
+    # сбрасываем ожидание
+    context.user_data.pop("await_username", None)
+
 
 async def remove_manager(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Удаление менеджера по Telegram ID
+    """
     text = update.message.text.strip()
 
     if not text.isdigit():
         await update.message.reply_text(
-            "❌ Нужно отправить Telegram ID числом."
+            "❌ Telegram ID должен быть числом."
         )
         return
 
     manager_id = int(text)
 
-    ensure_user_exists(user_id=manager_id)
+    role = get_user_role(manager_id)
+    if role != "manager":
+        await update.message.reply_text(
+            "❌ У этого пользователя нет роли менеджера."
+        )
+        return
+
     set_user_role(manager_id, "user")
 
     await update.message.reply_text(
-        f"➖ Роль менеджера у пользователя {manager_id} удалена."
+        f"🗑 Менеджер с ID {manager_id} удалён."
     )
+
+    context.user_data.pop("await_username", None)
