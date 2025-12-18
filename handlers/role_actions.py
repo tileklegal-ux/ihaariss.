@@ -1,32 +1,45 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from database.db import set_user_role, get_user_by_username
+from database.db import ensure_user_exists, set_user_role
 
 
 async def add_manager(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    username = update.message.text
-    user = get_user_by_username(username)
+    text = update.message.text.strip()
 
-    if not user:
-        await update.message.reply_text("Пользователь не найден")
+    if not text.isdigit():
+        await update.message.reply_text(
+            "❌ Нужно отправить Telegram ID числом."
+        )
         return
 
-    user_id = user[0]
-    set_user_role(user_id, "manager")
+    manager_id = int(text)
 
-    await update.message.reply_text(f"Менеджер @{username} добавлен")
+    # гарантируем, что пользователь есть в БД
+    ensure_user_exists(user_id=manager_id)
+
+    # назначаем роль
+    set_user_role(manager_id, "manager")
+
+    await update.message.reply_text(
+        f"✅ Пользователь с ID {manager_id} назначен менеджером."
+    )
 
 
 async def remove_manager(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    username = update.message.text
-    user = get_user_by_username(username)
+    text = update.message.text.strip()
 
-    if not user:
-        await update.message.reply_text("Пользователь не найден")
+    if not text.isdigit():
+        await update.message.reply_text(
+            "❌ Нужно отправить Telegram ID числом."
+        )
         return
 
-    user_id = user[0]
-    set_user_role(user_id, "user")
+    manager_id = int(text)
 
-    await update.message.reply_text(f"Менеджер @{username} удалён")
+    ensure_user_exists(user_id=manager_id)
+    set_user_role(manager_id, "user")
+
+    await update.message.reply_text(
+        f"➖ Роль менеджера у пользователя {manager_id} удалена."
+    )
