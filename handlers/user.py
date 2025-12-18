@@ -552,7 +552,12 @@ async def premium_benefits(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "2) История результатов\n"
         "3) Экспорт PDF / Excel\n\n"
         "Это ориентир, а не рекомендация.\n"
-        "Решение остаётся за тобой. Чтобы приобрести премиум напишите менеджеру @Artbazar_support ",
+        "Решение остаётся за тобой. Чтобы приобрести премиум напишите менеджеру @Artbazar_support Для активации Premium отправь менеджеру свой Telegram ID.
+
+Как узнать свой Telegram ID:
+1️⃣ Напиши боту @userinfobot  
+2️⃣ Скопируй число (ID)
+3️⃣ Отправь его менеджеру ",
         reply_markup=ReplyKeyboardMarkup([[KeyboardButton(BTN_BACK)]], resize_keyboard=True),
     )
 
