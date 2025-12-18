@@ -1,10 +1,9 @@
-# handlers/owner.py
-
 from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ContextTypes, MessageHandler, filters, Application
+from telegram.ext import ContextTypes, MessageHandler, filters
 
-from handlers.owner_stats import show_owner_stats
+from database.db import get_user_role
 from handlers.role_actions import add_manager, remove_manager
+from handlers.owner_stats import show_owner_stats
 
 
 OWNER_KEYBOARD = ReplyKeyboardMarkup(
@@ -25,6 +24,10 @@ async def owner_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def owner_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if get_user_role(user_id) != "owner":
+        return
+
     text = update.message.text
 
     if text == "📊 Общая статистика":
@@ -32,20 +35,19 @@ async def owner_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if text == "➕ Добавить менеджера":
-        await add_manager(update, context)
+        context.user_data["await_username"] = "add"
+        await update.message.reply_text("Введи username менеджера (@username)")
         return
 
     if text == "➖ Удалить менеджера":
-        await remove_manager(update, context)
+        context.user_data["await_username"] = "remove"
+        await update.message.reply_text("Введи username менеджера (@username)")
         return
 
     if text == "⬅️ Выйти":
-        await owner_start(update, context)
+        await update.message.reply_text("Выход из панели владельца")
         return
 
 
-def register_owner_handlers(app: Application):
-    app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, owner_text_router),
-        group=1,
-    )
+def register_owner_handlers(app):
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, owner_text_router), group=1)
