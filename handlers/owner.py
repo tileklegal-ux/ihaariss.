@@ -26,19 +26,20 @@ async def owner_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def owner_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
+    # защита: только владелец
     if get_user_role(user_id) != "owner":
         return
 
     text = update.message.text.strip()
 
-    # --- статистика ---
+    # ===== СТАТИСТИКА =====
     if text == "📊 Общая статистика":
         await show_owner_stats(update, context)
         return
 
-    # --- добавить менеджера ---
+    # ===== ДОБАВИТЬ МЕНЕДЖЕРА =====
     if text == "➕ Добавить менеджера":
-        context.user_data["await_action"] = "add_manager"
+        context.user_data["await_username"] = "add"
         await update.message.reply_text(
             "➕ Добавление менеджера\n\n"
             "Отправь Telegram ID пользователя, которого нужно сделать менеджером.\n\n"
@@ -49,35 +50,33 @@ async def owner_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # --- удалить менеджера ---
+    # ===== УДАЛИТЬ МЕНЕДЖЕРА =====
     if text == "➖ Удалить менеджера":
-        context.user_data["await_action"] = "remove_manager"
+        context.user_data["await_username"] = "remove"
         await update.message.reply_text(
             "➖ Удаление менеджера\n\n"
             "Отправь Telegram ID менеджера, которого нужно удалить."
         )
         return
 
-    # --- ожидание ID ---
-    if "await_action" in context.user_data and text.isdigit():
-        action = context.user_data.pop("await_action")
+    # ===== ОБРАБОТКА ВВЕДЁННОГО ID =====
+    if context.user_data.get("await_username") == "add":
+        await add_manager(update, context)
+        return
 
-        if action == "add_manager":
-            await add_manager(update, context)
-            return
+    if context.user_data.get("await_username") == "remove":
+        await remove_manager(update, context)
+        return
 
-        if action == "remove_manager":
-            await remove_manager(update, context)
-            return
-
+    # ===== ВЫХОД =====
     if text == "⬅️ Выйти":
-        await update.message.reply_text("Выход из панели владельца")
+        context.user_data.clear()
+        await update.message.reply_text("⬅️ Выход из панели владельца")
         return
 
 
 def register_owner_handlers(app):
-    # ВАЖНО: group=0 — раньше user-хендлеров
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, owner_text_router),
-        group=0,
+        group=1,
     )
