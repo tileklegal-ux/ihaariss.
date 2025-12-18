@@ -1,33 +1,47 @@
-# handlers/owner_stats.py
 from telegram import Update
 from telegram.ext import ContextTypes
-from contextlib import closing
+import psycopg2
+import os
 
-from database.db import get_connection
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+
+def get_connection():
+    return psycopg2.connect(DATABASE_URL)
 
 
 async def show_owner_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    with closing(get_connection()) as conn:
+    try:
+        conn = get_connection()
         cur = conn.cursor()
 
+        # Всего пользователей
         cur.execute("SELECT COUNT(*) FROM users")
-        total_users = int(cur.fetchone()[0] or 0)
+        total_users = cur.fetchone()[0]
 
+        # Premium пользователи
+        cur.execute(
+            "SELECT COUNT(*) FROM users WHERE premium_until > EXTRACT(EPOCH FROM NOW())"
+        )
+        premium_users = cur.fetchone()[0]
+
+        # Менеджеры
         cur.execute("SELECT COUNT(*) FROM users WHERE role = 'manager'")
-        managers = int(cur.fetchone()[0] or 0)
+        managers = cur.fetchone()[0]
 
-        cur.execute("SELECT COUNT(*) FROM users WHERE role = 'owner'")
-        owners = int(cur.fetchone()[0] or 0)
+        cur.close()
+        conn.close()
 
-        cur.execute("SELECT COUNT(*) FROM users WHERE premium_until > 0")
-        premium_any = int(cur.fetchone()[0] or 0)
+        text = (
+            "📊 *Общая статистика*\n\n"
+            f"👥 Всего пользователей: {total_users}\n"
+            f"⭐ Premium пользователей: {premium_users}\n"
+            f"🧑‍💼 Менеджеров: {managers}"
+        )
 
-    text = (
-        "📊 Общая статистика\n\n"
-        f"👥 Пользователей: {total_users}\n"
-        f"👑 Владельцев: {owners}\n"
-        f"🧑‍💼 Менеджеров: {managers}\n"
-        f"⭐ Premium (всего записей): {premium_any}"
-    )
+        await update.message.reply_text(text, parse_mode="Markdown")
 
-    await update.message.reply_text(text)
+    except Exception as e:
+        await update.message.reply_text("❌ Ошибка при получении статистики")
+        raise e
