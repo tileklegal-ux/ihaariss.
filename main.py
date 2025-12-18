@@ -1,32 +1,34 @@
-# main.py
+# main.py  (DEPLOY)
+
+import logging
 
 from telegram.ext import Application
 
-from config import BOT_TOKEN
+from config import TELEGRAM_TOKEN
 from database.db import init_db
+from handlers.user import (
+    register_handlers_user,
+    cmd_start_user,
+)
+from telegram.ext import CommandHandler
 
-from handlers.start import register_start_handlers
-from handlers.owner import register_owner_handlers
-from handlers.manager import register_manager_handlers
-from handlers.user import register_user_handlers
-from handlers.role_actions import role_actions_router
-from telegram.ext import MessageHandler, filters
+
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+)
 
 
 def main():
     init_db()
 
-    app = Application.builder().token(BOT_TOKEN).build()
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
 
-    register_start_handlers(app)
-    register_owner_handlers(app)
-    register_manager_handlers(app)
-    register_user_handlers(app)
+    # /start — ТОЛЬКО user.py (канон)
+    app.add_handler(CommandHandler("start", cmd_start_user), group=0)
 
-    app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, role_actions_router),
-        group=3,
-    )
+    # пользовательский роутер (FSM, кнопки, AI, premium)
+    register_handlers_user(app)
 
     app.run_polling()
 
