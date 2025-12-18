@@ -1,16 +1,14 @@
-# main.py  (DEPLOY)
-
 import logging
 
 from telegram.ext import Application
 
 from config import TELEGRAM_TOKEN
 from database.db import init_db
-from handlers.user import (
-    register_handlers_user,
-    cmd_start_user,
-)
-from telegram.ext import CommandHandler
+
+from handlers.start import register_start_handlers
+from handlers.user import register_handlers_user
+from handlers.owner import register_owner_handlers
+from handlers.manager import register_manager_handlers
 
 
 logging.basicConfig(
@@ -24,10 +22,12 @@ def main():
 
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
-    # /start — ТОЛЬКО user.py (канон)
-    app.add_handler(CommandHandler("start", cmd_start_user), group=0)
+    # /start — единый вход
+    register_start_handlers(app)
 
-    # пользовательский роутер (FSM, кнопки, AI, premium)
+    # handlers по ролям
+    register_owner_handlers(app)
+    register_manager_handlers(app)
     register_handlers_user(app)
 
     app.run_polling()
