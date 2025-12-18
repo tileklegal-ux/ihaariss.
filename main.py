@@ -1,51 +1,37 @@
 import logging
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
-
-from config import TELEGRAM_TOKEN
-from database.db import get_user_role, ensure_user_exists
-
-from handlers.user import cmd_start_user, register_handlers_user
-from handlers.owner import owner_start, register_handlers_owner
-from handlers.manager import manager_start, register_handlers_manager
-
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
 )
 
+from config import BOT_TOKEN
+from handlers.owner import owner_start, register_handlers_owner
+from handlers.user import handle_user_message
+from handlers.role_actions import role_text_router
+from database.db import ensure_user_exists
 
-async def start_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+logging.basicConfig(level=logging.INFO)
+
+
+async def start(update, context):
     user = update.effective_user
-    user_id = user.id
-    username = user.username
-
-    ensure_user_exists(user_id, username)
-
-    role = get_user_role(user_id)
-
-    if role == "owner":
-        await owner_start(update, context)
-        return
-
-    if role == "manager":
-        await manager_start(update, context)
-        return
-
-    await cmd_start_user(update, context)
+    ensure_user_exists(user.id, user.username)
+    await update.message.reply_text("👋 Добро пожаловать в ArtBazar AI!")
 
 
 def main():
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # ✅ ЕДИНСТВЕННЫЙ /start
-    app.add_handler(CommandHandler("start", start_router), group=0)
+    app.add_handler(CommandHandler("start", start))
 
-    # ✅ порядок важен
-    register_handlers_owner(app)      # group 2
-    register_handlers_manager(app)    # group 3
-    register_handlers_user(app)       # group 4
+    register_handlers_owner(app)
+
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, role_text_router))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_message))
 
     app.run_polling()
 
