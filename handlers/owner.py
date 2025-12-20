@@ -90,6 +90,6 @@ async def owner_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def register_owner_handlers(app):
     app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, owner_text_router),
+        MessageHandler(filters.TEXT & ~filters.COMMAND, owner_text_router, block=False),
         group=1,
     )
