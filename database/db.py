@@ -123,7 +123,6 @@ def is_user_premium(user_id: int) -> bool:
     if not premium_until:
         return False
 
-    # 🔥 ВОТ ЗДЕСЬ ВЕСЬ ВАРИАНТ A
     if premium_until <= datetime.now(timezone.utc):
         return False
 
