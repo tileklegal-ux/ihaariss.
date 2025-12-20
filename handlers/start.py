@@ -1,13 +1,3 @@
-# handlers/start.py
-from telegram import Update
-from telegram.ext import ContextTypes, CommandHandler
-
-from database.db import get_user_role, ensure_user_exists
-from handlers.owner import owner_start
-from handlers.manager import manager_start
-from handlers.user import cmd_start_user
-
-
 async def start_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u = update.effective_user
     ensure_user_exists(u.id, u.username or "")
@@ -22,8 +12,13 @@ async def start_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await manager_start(update, context)
         return
 
-    await cmd_start_user(update, context)
+    # ❗ ТОЛЬКО СТАВИМ ФЛАГ
+    context.user_data["onboarding"] = True
 
-
-def register_start_handlers(app):
-    app.add_handler(CommandHandler("start", start_router), group=0)
+    await update.message.reply_text(
+        "Привет! Продолжим?",
+        reply_markup=ReplyKeyboardMarkup(
+            [["Да", "Нет"]],
+            resize_keyboard=True
+        )
+    )
