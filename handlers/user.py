@@ -103,6 +103,9 @@ async def cmd_start_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def on_yes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop(ONBOARDING_KEY, None)
+    context.user_data.pop(AI_CHAT_MODE_KEY, None)
+    clear_fsm(context)
+    
     lang = context.user_data.get("lang", "ru")
     await update.message.reply_text(
         T(lang, "choose_section"),
@@ -111,6 +114,10 @@ async def on_yes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def on_no(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop(ONBOARDING_KEY, None)
+    context.user_data.pop(AI_CHAT_MODE_KEY, None)
+    clear_fsm(context)
+    
+    lang = context.user_data.get("lang", "ru")
     await update.message.reply_text(
         "Хорошо. Я рядом.",
         reply_markup=main_menu_keyboard(),
@@ -122,6 +129,7 @@ async def on_no(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def on_business_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
+    context.user_data["in_business_submenu"] = True
     lang = context.user_data.get("lang", "ru")
     await update.message.reply_text(
         T(lang, "business_hub_intro"),
@@ -150,6 +158,7 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == BTN_BACK:
         clear_fsm(context)
+        context.user_data["in_business_submenu"] = True
         await update.message.reply_text(
             "📊 Бизнес-анализ",
             reply_markup=business_hub_keyboard()
@@ -233,6 +242,7 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         save_insights(context, insights)
         clear_fsm(context)
+        context.user_data["in_business_submenu"] = True
         await update.message.reply_text(
             "📊 Бизнес-анализ",
             reply_markup=business_hub_keyboard()
@@ -261,6 +271,7 @@ async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == BTN_BACK:
         clear_fsm(context)
+        context.user_data["in_business_submenu"] = True
         await update.message.reply_text(
             "📊 Бизнес-анализ",
             reply_markup=business_hub_keyboard()
@@ -344,6 +355,7 @@ async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         save_insights(context, insights)
         clear_fsm(context)
+        context.user_data["in_business_submenu"] = True
         await update.message.reply_text(
             "📊 Бизнес-анализ",
             reply_markup=business_hub_keyboard()
@@ -702,14 +714,13 @@ async def ai_mentor_text_handler(update: Update, context: ContextTypes.DEFAULT_T
         )
 
 # =============================
-# ROUTER - ИСПРАВЛЕННЫЙ (УБРАН BTN_PM и BTN_GROWTH)
+# ROUTER - ИСПРАВЛЕННЫЙ
 # =============================
 
 async def user_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not _is_user_context(update):
         return
 
-    user_id = update.effective_user.id
     text = _safe_text(update)
     if not text:
         return
@@ -722,6 +733,9 @@ async def user_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text == BTN_NO:
             await on_no(update, context)
             return
+        # Если какая-то другая кнопка - всё равно показываем меню
+        context.user_data.pop(ONBOARDING_KEY, None)
+        await on_yes(update, context)
         return
 
     # 2. AI-CHAT
@@ -732,17 +746,7 @@ async def user_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await ai_mentor_text_handler(update, context)
         return
 
-    # 3. РОЛЬ (менеджер / юзер)
-    role = get_user_role(update.effective_user.id)
-    if role == "manager":
-        return
-
-    # 4. МЕНЮ ЮЗЕРА - ИСПРАВЛЕНО: УБРАНЫ BTN_PM и BTN_GROWTH
-    if text == BTN_BIZ:
-        await on_business_analysis(update, context)
-        return
-
-    # 5. ПОДМЕНЮ БИЗНЕС-АНАЛИЗА (только здесь обрабатываются)
+    # 3. ПОДМЕНЮ БИЗНЕС-АНАЛИЗА
     if context.user_data.get("in_business_submenu"):
         if text == BTN_PM:
             await pm_start(update, context)
@@ -755,13 +759,14 @@ async def user_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         if text == BTN_BACK:
             context.user_data.pop("in_business_submenu", None)
+            lang = context.user_data.get("lang", "ru")
             await update.message.reply_text(
-                T(context.user_data.get("lang", "ru"), "choose_section"),
+                T(lang, "choose_section"),
                 reply_markup=main_menu_keyboard(),
             )
             return
 
-    # 6. FSM HANDLERS
+    # 4. FSM HANDLERS
     if context.user_data.get(PM_STATE_KEY):
         await pm_handler(update, context)
         return
@@ -794,7 +799,11 @@ async def user_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await ns_handler(update, context)
         return
 
-    # 7. ОСНОВНЫЕ КНОПКИ
+    # 5. ОСНОВНЫЕ КНОПКИ
+    if text == BTN_BIZ:
+        await on_business_analysis(update, context)
+        return
+
     if text == BTN_ANALYSIS:
         await ta_start(update, context)
         return
@@ -827,7 +836,7 @@ async def user_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await ai_mentor_intro(update, context)
         return
 
-    # 8. По умолчанию возвращаем в меню
+    # 6. По умолчанию возвращаем в меню
     lang = context.user_data.get("lang", "ru")
     await update.message.reply_text(
         T(lang, "choose_section"),
