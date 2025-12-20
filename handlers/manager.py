@@ -45,7 +45,7 @@ async def manager_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE
             "2️⃣ Скопируй ID\n"
             "3️⃣ Пришли сюда"
         )
-        return
+        return  # НЕ УДАЛЯТЬ - это правильный return
 
     if text == "⬅️ Выйти":
         context.user_data.clear()
@@ -95,7 +95,7 @@ async def manager_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"⏳ Срок: {days} дней"
         )
 
-        # ВОЗВРАТ В МЕНЮ МЕНЕДЖЕРА (КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ)
+        # ВОЗВРАТ В МЕНЮ МЕНЕДЖЕРА
         await manager_start(update, context)
 
         # уведомление пользователю
