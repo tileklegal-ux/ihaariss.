@@ -24,7 +24,7 @@ BTN_PREMIUM = "❤️ Premium"
 BTN_PREMIUM_BENEFITS = "❤️ Что даёт Premium"
 
 # AI CHAT
-BTN_AI_CHAT = "🤖 AI чат"
+BTN_AI_CHAT = "🧭 AI-наставник"
 BTN_EXIT_CHAT = "❌ Выйти из AI-чата"
 
 # =============================
