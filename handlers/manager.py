@@ -118,4 +118,4 @@ def register_manager_handlers(app):
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, manager_text_router),
         group=1,
-    
+    )
