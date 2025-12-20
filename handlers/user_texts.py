@@ -338,7 +338,7 @@ USER_TEXTS = {
         # ===== COMMON =====
         "no_data_for_export": "Есеп үшін дерек жоқ.",
         "back_to_menu": "Басты мәзір",
-        "need_premium_for_export": "Экспорт үшін Premium қажет.",
+        "need_premium_for_export": "Экспорт үшүн Premium қажет.",
         "export_success": "Есеп сәтті құрылды.",
     },
 }
