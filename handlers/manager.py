@@ -33,6 +33,7 @@ MANAGER_KEYBOARD = ReplyKeyboardMarkup(
 # =============================
 
 async def manager_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    ensure_user_exists(update.effective_user.id)
     context.user_data.pop(MANAGER_AWAIT_PREMIUM, None)
 
     await update.message.reply_text(
@@ -51,12 +52,10 @@ async def manager_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     user_id = user.id
 
-    try:
-        role = get_user_role(user_id)
-    except Exception:
-        return
+    # 🔑 КРИТИЧЕСКИ ВАЖНО
+    ensure_user_exists(user_id)
 
-    # ⛔️ ВАЖНО: работаем ТОЛЬКО с менеджером
+    role = get_user_role(user_id)
     if role != "manager":
         return
 
