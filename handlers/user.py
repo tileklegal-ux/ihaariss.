@@ -729,28 +729,31 @@ async def user_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not text:
         return
 
-    # Onboarding — ОБРАБАТЫВАЕМ СРАЗУ
+    # 1. ONBOARDING — ПЕРВЫМ
     if context.user_data.get(ONBOARDING_KEY):
         if text == BTN_YES:
             await on_yes(update, context)
             return
-
         if text == BTN_NO:
             await on_no(update, context)
             return
+        return  # ⬅️ КРИТИЧЕСКИ ВАЖНО
 
-        return
-
-    # AI-наставник: выход
+    # 2. AI-CHAT
     if context.user_data.get(AI_CHAT_MODE_KEY):
         if text == BTN_EXIT_CHAT:
             await ai_mentor_exit(update, context)
             return
-        # во время режима чата игнорируем нажатия меню, отвечаем на текст
         await ai_mentor_text_handler(update, context)
         return
 
-    # Меню
+    # 3. РОЛЬ (менеджер / юзер)
+    role = get_user_role(update.effective_user.id)
+    if role == "manager":
+        await manager_router(update, context)
+        return
+
+    # 4. МЕНЮ ЮЗЕРА
     if text == BTN_BIZ:
         await on_business_analysis(update, context)
         return
