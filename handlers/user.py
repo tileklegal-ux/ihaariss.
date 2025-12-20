@@ -693,10 +693,12 @@ async def user_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if text == BTN_ANALYSIS:
+        clear_fsm(context)
         await ta_start(update, context)
         return
 
     if text == BTN_NICHE:
+        clear_fsm(context)
         await ns_start(update, context)
         return
 
