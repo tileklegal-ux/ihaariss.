@@ -23,7 +23,10 @@ BTN_DOCS = "📄 Документы и условия"
 BTN_PREMIUM = "❤️ Premium"
 BTN_PREMIUM_BENEFITS = "❤️ Что даёт Premium"
 
-# AI CHAT
+# =============================
+# AI НАСТАВНИК
+# =============================
+
 BTN_AI_CHAT = "🧭 AI-наставник"
 BTN_EXIT_CHAT = "❌ Выйти из AI-чата"
 
@@ -57,7 +60,6 @@ def business_hub_keyboard():
 def pm_step_keyboard(step):
     """Клавиатура для шагов FSM прибыли и денег"""
     if step == 1:
-        # Шаг 1: Тип бизнеса
         return ReplyKeyboardMarkup(
             [
                 [KeyboardButton("Услуги"), KeyboardButton("Товары")],
@@ -67,7 +69,6 @@ def pm_step_keyboard(step):
             resize_keyboard=True,
         )
     elif step == 2:
-        # Шаг 2: Источник выручки
         return ReplyKeyboardMarkup(
             [
                 [KeyboardButton("Офлайн"), KeyboardButton("Онлайн")],
@@ -77,7 +78,6 @@ def pm_step_keyboard(step):
             resize_keyboard=True,
         )
     elif step == 3:
-        # Шаг 3: Постоянные расходы
         return ReplyKeyboardMarkup(
             [
                 [KeyboardButton("Аренда"), KeyboardButton("Зарплаты")],
@@ -87,7 +87,6 @@ def pm_step_keyboard(step):
             resize_keyboard=True,
         )
     elif step == 4:
-        # Шаг 4: Переменные расходы
         return ReplyKeyboardMarkup(
             [
                 [KeyboardButton("Материалы"), KeyboardButton("Логистика")],
@@ -97,7 +96,6 @@ def pm_step_keyboard(step):
             resize_keyboard=True,
         )
     elif step == 5:
-        # Шаг 5: Рентабельность
         return ReplyKeyboardMarkup(
             [
                 [KeyboardButton("До 10%"), KeyboardButton("10-20%")],
@@ -107,16 +105,12 @@ def pm_step_keyboard(step):
             resize_keyboard=True,
         )
     else:
-        return ReplyKeyboardMarkup(
-            [[KeyboardButton(BTN_BACK)]],
-            resize_keyboard=True,
-        )
+        return step_keyboard()
 
 
 def growth_step_keyboard(step):
     """Клавиатура для шагов FSM роста и продаж"""
     if step == 1:
-        # Шаг 1: Текущий канал
         return ReplyKeyboardMarkup(
             [
                 [KeyboardButton("Instagram"), KeyboardButton("TikTok")],
@@ -126,7 +120,6 @@ def growth_step_keyboard(step):
             resize_keyboard=True,
         )
     elif step == 2:
-        # Шаг 2: Конверсия
         return ReplyKeyboardMarkup(
             [
                 [KeyboardButton("До 1%"), KeyboardButton("1-3%")],
@@ -136,7 +129,6 @@ def growth_step_keyboard(step):
             resize_keyboard=True,
         )
     elif step == 3:
-        # Шаг 3: Стоимость привлечения
         return ReplyKeyboardMarkup(
             [
                 [KeyboardButton("До 100р"), KeyboardButton("100-500р")],
@@ -146,7 +138,6 @@ def growth_step_keyboard(step):
             resize_keyboard=True,
         )
     elif step == 4:
-        # Шаг 4: Удержание клиентов
         return ReplyKeyboardMarkup(
             [
                 [KeyboardButton("До 10%"), KeyboardButton("10-30%")],
@@ -156,7 +147,6 @@ def growth_step_keyboard(step):
             resize_keyboard=True,
         )
     elif step == 5:
-        # Шаг 5: Планы роста
         return ReplyKeyboardMarkup(
             [
                 [KeyboardButton("Новый канал"), KeyboardButton("Улучшение текущего")],
@@ -166,14 +156,10 @@ def growth_step_keyboard(step):
             resize_keyboard=True,
         )
     else:
-        return ReplyKeyboardMarkup(
-            [[KeyboardButton(BTN_BACK)]],
-            resize_keyboard=True,
-        )
+        return step_keyboard()
 
 
 def step_keyboard():
-    """Общая клавиатура для шагов (только Назад)"""
     return ReplyKeyboardMarkup(
         [[KeyboardButton(BTN_BACK)]],
         resize_keyboard=True,
