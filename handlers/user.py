@@ -160,31 +160,46 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == BTN_BACK:
         clear_fsm(context)
-        await update.message.reply_text("📊 Бизнес-анализ", reply_markup=business_hub_keyboard())
+        await update.message.reply_text(
+            "📊 Бизнес-анализ",
+            reply_markup=business_hub_keyboard()
+        )
         return
 
     if step == 1:
         context.user_data["pm_type"] = text
         context.user_data[PM_STEP] = 2
-        await update.message.reply_text(T(lang, "pm_step1"), reply_markup=pm_step_keyboard(2))
+        await update.message.reply_text(
+            T(lang, "pm_step1"),
+            reply_markup=pm_step_keyboard(2)
+        )
         return
 
     if step == 2:
         context.user_data["pm_source"] = text
         context.user_data[PM_STEP] = 3
-        await update.message.reply_text(T(lang, "pm_step2"), reply_markup=pm_step_keyboard(3))
+        await update.message.reply_text(
+            T(lang, "pm_step2"),
+            reply_markup=pm_step_keyboard(3)
+        )
         return
 
     if step == 3:
         context.user_data["pm_fixed"] = text
         context.user_data[PM_STEP] = 4
-        await update.message.reply_text(T(lang, "pm_step3"), reply_markup=pm_step_keyboard(4))
+        await update.message.reply_text(
+            T(lang, "pm_step3"),
+            reply_markup=pm_step_keyboard(4)
+        )
         return
 
     if step == 4:
         context.user_data["pm_variable"] = text
         context.user_data[PM_STEP] = 5
-        await update.message.reply_text(T(lang, "pm_step4"), reply_markup=pm_step_keyboard(5))
+        await update.message.reply_text(
+            T(lang, "pm_step4"),
+            reply_markup=pm_step_keyboard(5)
+        )
         return
 
     if step == 5:
@@ -208,12 +223,18 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Данные:\n{insights}\n"
         )
 
-        await update.message.reply_text(insights, reply_markup=business_hub_keyboard())
+        await update.message.reply_text(
+            insights,
+            reply_markup=business_hub_keyboard()
+        )
 
         try:
             await update.message.chat.send_action("typing")
             ai_text = await ask_openai(ai_prompt)
-            await update.message.reply_text(ai_text, reply_markup=business_hub_keyboard())
+            await update.message.reply_text(
+                ai_text,
+                reply_markup=business_hub_keyboard()
+            )
         except Exception:
             await update.message.reply_text(
                 "⚠️ Не удалось получить AI-комментарий.",
@@ -222,7 +243,10 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         save_insights(context, insights)
         clear_fsm(context)
-        await update.message.reply_text("📊 Бизнес-анализ", reply_markup=business_hub_keyboard())
+        await update.message.reply_text(
+            "📊 Бизнес-анализ",
+            reply_markup=business_hub_keyboard()
+        )
         return
 
 
@@ -249,31 +273,46 @@ async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == BTN_BACK:
         clear_fsm(context)
-        await update.message.reply_text("📊 Бизнес-анализ", reply_markup=business_hub_keyboard())
+        await update.message.reply_text(
+            "📊 Бизнес-анализ",
+            reply_markup=business_hub_keyboard()
+        )
         return
 
     if step == 1:
         context.user_data["growth_channel"] = text
         context.user_data[GROWTH_STEP] = 2
-        await update.message.reply_text(T(lang, "growth_step1"), reply_markup=growth_step_keyboard(2))
+        await update.message.reply_text(
+            T(lang, "growth_step1"),
+            reply_markup=growth_step_keyboard(2)
+        )
         return
 
     if step == 2:
         context.user_data["growth_conversion"] = text
         context.user_data[GROWTH_STEP] = 3
-        await update.message.reply_text(T(lang, "growth_step2"), reply_markup=growth_step_keyboard(3))
+        await update.message.reply_text(
+            T(lang, "growth_step2"),
+            reply_markup=growth_step_keyboard(3)
+        )
         return
 
     if step == 3:
         context.user_data["growth_cost"] = text
         context.user_data[GROWTH_STEP] = 4
-        await update.message.reply_text(T(lang, "growth_step3"), reply_markup=growth_step_keyboard(4))
+        await update.message.reply_text(
+            T(lang, "growth_step3"),
+            reply_markup=growth_step_keyboard(4)
+        )
         return
 
     if step == 4:
         context.user_data["growth_retention"] = text
         context.user_data[GROWTH_STEP] = 5
-        await update.message.reply_text(T(lang, "growth_step4"), reply_markup=growth_step_keyboard(5))
+        await update.message.reply_text(
+            T(lang, "growth_step4"),
+            reply_markup=growth_step_keyboard(5)
+        )
         return
 
     if step == 5:
@@ -297,12 +336,18 @@ async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Данные:\n{insights}\n"
         )
 
-        await update.message.reply_text(insights, reply_markup=business_hub_keyboard())
+        await update.message.reply_text(
+            insights,
+            reply_markup=business_hub_keyboard()
+        )
 
         try:
             await update.message.chat.send_action("typing")
             ai_text = await ask_openai(ai_prompt)
-            await update.message.reply_text(ai_text, reply_markup=business_hub_keyboard())
+            await update.message.reply_text(
+                ai_text,
+                reply_markup=business_hub_keyboard()
+            )
         except Exception:
             await update.message.reply_text(
                 "⚠️ Не удалось получить AI-комментарий.",
@@ -311,7 +356,10 @@ async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         save_insights(context, insights)
         clear_fsm(context)
-        await update.message.reply_text("📊 Бизнес-анализ", reply_markup=business_hub_keyboard())
+        await update.message.reply_text(
+            "📊 Бизнес-анализ",
+            reply_markup=business_hub_keyboard()
+        )
         return
 
 
@@ -325,7 +373,10 @@ async def ta_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data[TA_STEP] = 1
 
     lang = context.user_data.get("lang", "ru")
-    await update.message.reply_text(T(lang, "ta_intro"), reply_markup=step_keyboard())
+    await update.message.reply_text(
+        T(lang, "ta_intro"),
+        reply_markup=step_keyboard()
+    )
 
 
 async def ta_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -335,37 +386,55 @@ async def ta_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == BTN_BACK:
         clear_fsm(context)
-        await update.message.reply_text(T(lang, "choose_section"), reply_markup=main_menu_keyboard())
+        await update.message.reply_text(
+            T(lang, "choose_section"),
+            reply_markup=main_menu_keyboard()
+        )
         return
 
     if step == 1:
         context.user_data[TA_STAGE] = text
         context.user_data[TA_STEP] = 2
-        await update.message.reply_text(T(lang, "ta_reason_ask"), reply_markup=step_keyboard())
+        await update.message.reply_text(
+            T(lang, "ta_reason_ask"),
+            reply_markup=step_keyboard()
+        )
         return
 
     if step == 2:
         context.user_data[TA_REASON] = text
         context.user_data[TA_STEP] = 3
-        await update.message.reply_text(T(lang, "ta_season_ask"), reply_markup=step_keyboard())
+        await update.message.reply_text(
+            T(lang, "ta_season_ask"),
+            reply_markup=step_keyboard()
+        )
         return
 
     if step == 3:
         context.user_data[TA_SEASON] = text
         context.user_data[TA_STEP] = 4
-        await update.message.reply_text(T(lang, "ta_comp_ask"), reply_markup=step_keyboard())
+        await update.message.reply_text(
+            T(lang, "ta_comp_ask"),
+            reply_markup=step_keyboard()
+        )
         return
 
     if step == 4:
         context.user_data[TA_COMP] = text
         context.user_data[TA_STEP] = 5
-        await update.message.reply_text(T(lang, "ta_price_ask"), reply_markup=step_keyboard())
+        await update.message.reply_text(
+            T(lang, "ta_price_ask"),
+            reply_markup=step_keyboard()
+        )
         return
 
     if step == 5:
         context.user_data[TA_PRICE] = text
         context.user_data[TA_STEP] = 6
-        await update.message.reply_text(T(lang, "ta_resource_ask"), reply_markup=step_keyboard())
+        await update.message.reply_text(
+            T(lang, "ta_resource_ask"),
+            reply_markup=step_keyboard()
+        )
         return
 
     if step == 6:
@@ -390,12 +459,18 @@ async def ta_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{insights}\n"
         )
 
-        await update.message.reply_text(insights, reply_markup=main_menu_keyboard())
+        await update.message.reply_text(
+            insights,
+            reply_markup=main_menu_keyboard()
+        )
 
         try:
             await update.message.chat.send_action("typing")
             ai_text = await ask_openai(ai_prompt)
-            await update.message.reply_text(ai_text, reply_markup=main_menu_keyboard())
+            await update.message.reply_text(
+                ai_text,
+                reply_markup=main_menu_keyboard()
+            )
         except Exception:
             await update.message.reply_text(
                 "⚠️ Не удалось получить AI-комментарий.",
@@ -404,7 +479,10 @@ async def ta_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         save_insights(context, insights)
         clear_fsm(context)
-        await update.message.reply_text(T(lang, "choose_section"), reply_markup=main_menu_keyboard())
+        await update.message.reply_text(
+            T(lang, "choose_section"),
+            reply_markup=main_menu_keyboard()
+        )
         return
 
 
@@ -417,7 +495,10 @@ async def ns_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data[NS_STEP_KEY] = 1
 
     lang = context.user_data.get("lang", "ru")
-    await update.message.reply_text(T(lang, "ns_intro"), reply_markup=step_keyboard())
+    await update.message.reply_text(
+        T(lang, "ns_intro"),
+        reply_markup=step_keyboard()
+    )
 
 
 async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -427,37 +508,55 @@ async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == BTN_BACK:
         clear_fsm(context)
-        await update.message.reply_text(T(lang, "choose_section"), reply_markup=main_menu_keyboard())
+        await update.message.reply_text(
+            T(lang, "choose_section"),
+            reply_markup=main_menu_keyboard()
+        )
         return
 
     if step == 1:
         context.user_data["ns_goal"] = text
         context.user_data[NS_STEP_KEY] = 2
-        await update.message.reply_text(T(lang, "ns_format_ask"), reply_markup=step_keyboard())
+        await update.message.reply_text(
+            T(lang, "ns_format_ask"),
+            reply_markup=step_keyboard()
+        )
         return
 
     if step == 2:
         context.user_data["ns_format"] = text
         context.user_data[NS_STEP_KEY] = 3
-        await update.message.reply_text(T(lang, "ns_demand_ask"), reply_markup=step_keyboard())
+        await update.message.reply_text(
+            T(lang, "ns_demand_ask"),
+            reply_markup=step_keyboard()
+        )
         return
 
     if step == 3:
         context.user_data["ns_demand"] = text
         context.user_data[NS_STEP_KEY] = 4
-        await update.message.reply_text(T(lang, "ns_season_ask"), reply_markup=step_keyboard())
+        await update.message.reply_text(
+            T(lang, "ns_season_ask"),
+            reply_markup=step_keyboard()
+        )
         return
 
     if step == 4:
         context.user_data["ns_season"] = text
         context.user_data[NS_STEP_KEY] = 5
-        await update.message.reply_text(T(lang, "ns_competition_ask"), reply_markup=step_keyboard())
+        await update.message.reply_text(
+            T(lang, "ns_competition_ask"),
+            reply_markup=step_keyboard()
+        )
         return
 
     if step == 5:
         context.user_data["ns_comp"] = text
         context.user_data[NS_STEP_KEY] = 6
-        await update.message.reply_text(T(lang, "ns_resources_ask"), reply_markup=step_keyboard())
+        await update.message.reply_text(
+            T(lang, "ns_resources_ask"),
+            reply_markup=step_keyboard()
+        )
         return
 
     if step == 6:
@@ -481,12 +580,18 @@ async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{insights}\n"
         )
 
-        await update.message.reply_text(insights, reply_markup=main_menu_keyboard())
+        await update.message.reply_text(
+            insights,
+            reply_markup=main_menu_keyboard()
+        )
 
         try:
             await update.message.chat.send_action("typing")
             ai_text = await ask_openai(ai_prompt)
-            await update.message.reply_text(ai_text, reply_markup=main_menu_keyboard())
+            await update.message.reply_text(
+                ai_text,
+                reply_markup=main_menu_keyboard()
+            )
         except Exception:
             await update.message.reply_text(
                 "⚠️ Не удалось получить AI-комментарий.",
@@ -495,7 +600,10 @@ async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         save_insights(context, insights)
         clear_fsm(context)
-        await update.message.reply_text(T(lang, "choose_section"), reply_markup=main_menu_keyboard())
+        await update.message.reply_text(
+            T(lang, "choose_section"),
+            reply_markup=main_menu_keyboard()
+        )
         return
 
 
@@ -596,7 +704,10 @@ async def ai_mentor_text_handler(update: Update, context: ContextTypes.DEFAULT_T
 
     try:
         answer = await ask_openai(prompt)
-        await update.message.reply_text(answer, reply_markup=ai_chat_keyboard())
+        await update.message.reply_text(
+            answer,
+            reply_markup=ai_chat_keyboard()
+        )
     except Exception:
         await update.message.reply_text(
             "⚠️ Сейчас не удалось получить ответ. Попробуй чуть позже.",
@@ -613,19 +724,21 @@ async def user_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     user_id = update.effective_user.id
-    
 
     text = _safe_text(update)
     if not text:
         return
-# Onboarding — ОБРАБАТЫВАЕМ СРАЗУ
-if context.user_data.get(ONBOARDING_KEY):
-    if text == BTN_YES:
-        await on_yes(update, context)
-        return
 
-    if text == BTN_NO:
-        await on_no(update, context)
+    # Onboarding — ОБРАБАТЫВАЕМ СРАЗУ
+    if context.user_data.get(ONBOARDING_KEY):
+        if text == BTN_YES:
+            await on_yes(update, context)
+            return
+
+        if text == BTN_NO:
+            await on_no(update, context)
+            return
+
         return
 
     # AI-наставник: выход
@@ -636,8 +749,6 @@ if context.user_data.get(ONBOARDING_KEY):
         # во время режима чата игнорируем нажатия меню, отвечаем на текст
         await ai_mentor_text_handler(update, context)
         return
-
-    
 
     # Меню
     if text == BTN_BIZ:
