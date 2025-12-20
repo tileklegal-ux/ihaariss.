@@ -107,6 +107,7 @@ async def handle_company_stage(update: Update, context: ContextTypes.DEFAULT_TYP
     
     if text == BTN_BACK:
         clear_fsm(context)
+        context.user_data["in_business_submenu"] = True
         await update.message.reply_text(
             "📊 Бизнес-анализ",
             reply_markup=ReplyKeyboardMarkup(
