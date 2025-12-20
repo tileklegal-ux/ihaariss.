@@ -739,10 +739,7 @@ async def user_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text == BTN_NO:
             await on_no(update, context)
             return
-        # Если какая-то другая кнопка - всё равно показываем меню
-        context.user_data.pop(ONBOARDING_KEY, None)
-        await on_yes(update, context)
-        return
+        
 
     # 2. AI-CHAT
     if context.user_data.get(AI_CHAT_MODE_KEY):
@@ -751,7 +748,10 @@ async def user_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         await ai_mentor_text_handler(update, context)
         return
-
+    # Если какая-то другая кнопка - всё равно показываем меню
+        context.user_data.pop(ONBOARDING_KEY, None)
+        await on_yes(update, context)
+        return
     # 3. ОСНОВНЫЕ КНОПКИ (ДОБАВЛЕНО: проверка перед подменю)
     if text == BTN_BIZ:
         await on_business_analysis(update, context)
