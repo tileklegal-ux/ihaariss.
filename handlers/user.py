@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 
 import logging
+
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
 from handlers.user_keyboards import (
-    BTN_AI_CHAT,
-    BTN_EXIT_CHAT,
-    ai_chat_keyboard,
+    BTN_AI_CHAT,  # 🤖 AI-наставник (одноразовый вопрос-ответ)
     main_menu_keyboard,
     business_hub_keyboard,
     pm_step_keyboard,
@@ -26,7 +25,7 @@ from handlers.user_keyboards import (
     BTN_PREMIUM_BENEFITS,
     BTN_BIZ,
     BTN_DOCS,
-    BTN_COMPANY_STAGE
+    BTN_COMPANY_STAGE,
 )
 
 from handlers.user_texts import t as T
@@ -37,7 +36,7 @@ from handlers.company_stage import (
     start_company_stage,
     handle_company_stage,
     handle_company_stage_export,
-    COMPANY_STAGE_STATE
+    COMPANY_STAGE_STATE,
 )
 
 from services.openai_client import ask_openai
@@ -50,8 +49,10 @@ logger = logging.getLogger(__name__)
 # =============================
 PM_STATE_KEY = "pm_state"
 PM_STEP = "pm_step"
+
 GROWTH_KEY = "growth_state"
 GROWTH_STEP = "growth_step"
+
 TA_STATE_KEY = "ta_state"
 TA_STEP = "ta_step"
 TA_STAGE = "ta_stage"
@@ -60,29 +61,35 @@ TA_SEASON = "ta_season"
 TA_COMP = "ta_comp"
 TA_PRICE = "ta_price"
 TA_RESOURCE = "ta_resource"
+
 NS_STEP_KEY = "ns_step"
+
 ONBOARDING_KEY = "onboarding"
-AI_CHAT_MODE_KEY = "ai_chat_mode"
+
+# Канон: AI-наставник — НЕ режим. Разрешено только одноразовое ожидание 1 вопроса.
+AI_MENTOR_PENDING_KEY = "ai_mentor_pending"
 
 # =============================
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 # =============================
 
+
 def _safe_text(update: Update) -> str:
     return (update.message.text or "").strip() if update and update.message else ""
 
+
 def _is_user_context(update: Update) -> bool:
-    if not update or not update.effective_user:
-        return False
-    return True
+    return bool(update and update.effective_user)
+
 
 # =============================
 # START / ONBOARDING
 # =============================
 
+
 async def cmd_start_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
-    context.user_data.pop(AI_CHAT_MODE_KEY, None)
+    context.user_data.pop(AI_MENTOR_PENDING_KEY, None)
 
     if "lang" not in context.user_data:
         context.user_data["lang"] = "ru"
@@ -101,9 +108,10 @@ async def cmd_start_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ),
     )
 
+
 async def on_yes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop(ONBOARDING_KEY, None)
-    context.user_data.pop(AI_CHAT_MODE_KEY, None)
+    context.user_data.pop(AI_MENTOR_PENDING_KEY, None)
     clear_fsm(context)
 
     lang = context.user_data.get("lang", "ru")
@@ -112,9 +120,10 @@ async def on_yes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu_keyboard(),
     )
 
+
 async def on_no(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop(ONBOARDING_KEY, None)
-    context.user_data.pop(AI_CHAT_MODE_KEY, None)
+    context.user_data.pop(AI_MENTOR_PENDING_KEY, None)
     clear_fsm(context)
 
     lang = context.user_data.get("lang", "ru")
@@ -123,9 +132,11 @@ async def on_no(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu_keyboard(),
     )
 
+
 # =============================
 # 📊 БИЗНЕС-АНАЛИЗ (ХАБ) - ТОЛЬКО ПОДМЕНЮ
 # =============================
+
 
 async def on_business_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
@@ -136,9 +147,11 @@ async def on_business_analysis(update: Update, context: ContextTypes.DEFAULT_TYP
         reply_markup=business_hub_keyboard(),
     )
 
+
 # =============================
 # 💰 ПРИБЫЛЬ И ДЕНЬГИ (FSM) - ТОЛЬКО В ПОДМЕНЮ
 # =============================
+
 
 async def pm_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
@@ -151,6 +164,7 @@ async def pm_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=pm_step_keyboard(1),
     )
 
+
 async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = _safe_text(update)
     lang = context.user_data.get("lang", "ru")
@@ -161,7 +175,7 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["in_business_submenu"] = True
         await update.message.reply_text(
             "📊 Бизнес-анализ",
-            reply_markup=business_hub_keyboard()
+            reply_markup=business_hub_keyboard(),
         )
         return
 
@@ -170,7 +184,7 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data[PM_STEP] = 2
         await update.message.reply_text(
             T(lang, "pm_step1"),
-            reply_markup=pm_step_keyboard(2)
+            reply_markup=pm_step_keyboard(2),
         )
         return
 
@@ -179,7 +193,7 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data[PM_STEP] = 3
         await update.message.reply_text(
             T(lang, "pm_step2"),
-            reply_markup=pm_step_keyboard(3)
+            reply_markup=pm_step_keyboard(3),
         )
         return
 
@@ -188,7 +202,7 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data[PM_STEP] = 4
         await update.message.reply_text(
             T(lang, "pm_step3"),
-            reply_markup=pm_step_keyboard(4)
+            reply_markup=pm_step_keyboard(4),
         )
         return
 
@@ -197,7 +211,7 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data[PM_STEP] = 5
         await update.message.reply_text(
             T(lang, "pm_step4"),
-            reply_markup=pm_step_keyboard(5)
+            reply_markup=pm_step_keyboard(5),
         )
         return
 
@@ -229,17 +243,21 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ai_text = await ask_openai(ai_prompt)
             await update.message.reply_text(ai_text, reply_markup=business_hub_keyboard())
         except Exception:
-            await update.message.reply_text("⚠️ Не удалось получить AI-комментарий.", reply_markup=business_hub_keyboard())
+            await update.message.reply_text(
+                "⚠️ Не удалось получить AI-комментарий.",
+                reply_markup=business_hub_keyboard(),
+            )
 
         save_insights(context, insights)
-
         clear_fsm(context)
         await update.message.reply_text("📊 Бизнес-анализ", reply_markup=business_hub_keyboard())
         return
 
+
 # =============================
 # 🚀 РОСТ И ПРОДАЖИ (FSM) - ПОЛНЫЙ 5 ШАГОВ
 # =============================
+
 
 async def growth_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
@@ -252,10 +270,11 @@ async def growth_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=growth_step_keyboard(1),
     )
 
+
 async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = _safe_text(update)
     lang = context.user_data.get("lang", "ru")
-    step = context.user_data.get(GROWTH_STEP, 1)
+    step = int(context.user_data.get(GROWTH_STEP, 1))
 
     if text == BTN_BACK:
         clear_fsm(context)
@@ -326,17 +345,21 @@ async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ai_text = await ask_openai(ai_prompt)
             await update.message.reply_text(ai_text, reply_markup=business_hub_keyboard())
         except Exception:
-            await update.message.reply_text("⚠️ Не удалось получить AI-комментарий.", reply_markup=business_hub_keyboard())
+            await update.message.reply_text(
+                "⚠️ Не удалось получить AI-комментарий.",
+                reply_markup=business_hub_keyboard(),
+            )
 
         save_insights(context, insights)
-
         clear_fsm(context)
         await update.message.reply_text("📊 Бизнес-анализ", reply_markup=business_hub_keyboard())
         return
 
+
 # =============================
 # 📦 АНАЛИТИКА ТОВАРА (FSM)
 # =============================
+
 
 async def ta_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
@@ -346,10 +369,11 @@ async def ta_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data.get("lang", "ru")
     await update.message.reply_text(T(lang, "ta_intro"), reply_markup=step_keyboard())
 
+
 async def ta_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data.get("lang", "ru")
     text = _safe_text(update)
-    step = context.user_data.get(TA_STEP, 1)
+    step = int(context.user_data.get(TA_STEP, 1))
 
     if text == BTN_BACK:
         clear_fsm(context)
@@ -422,17 +446,21 @@ async def ta_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ai_text = await ask_openai(ai_prompt)
             await update.message.reply_text(ai_text, reply_markup=business_hub_keyboard())
         except Exception:
-            await update.message.reply_text("⚠️ Не удалось получить AI-комментарий.", reply_markup=business_hub_keyboard())
+            await update.message.reply_text(
+                "⚠️ Не удалось получить AI-комментарий.",
+                reply_markup=business_hub_keyboard(),
+            )
 
         save_insights(context, insights)
-
         clear_fsm(context)
         await update.message.reply_text("📊 Бизнес-анализ", reply_markup=business_hub_keyboard())
         return
 
+
 # =============================
 # 🔎 ПОДБОР НИШИ (FSM)
 # =============================
+
 
 async def ns_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
@@ -441,10 +469,11 @@ async def ns_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data.get("lang", "ru")
     await update.message.reply_text(T(lang, "ns_intro"), reply_markup=step_keyboard())
 
+
 async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data.get("lang", "ru")
     text = _safe_text(update)
-    step = context.user_data.get(NS_STEP_KEY, 1)
+    step = int(context.user_data.get(NS_STEP_KEY, 1))
 
     if text == BTN_BACK:
         clear_fsm(context)
@@ -466,28 +495,19 @@ async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if step == 3:
         context.user_data["ns_demand"] = text
         context.user_data[NS_STEP_KEY] = 4
-        await update.message.reply_text(
-            T(lang, "ns_season_ask"),
-            reply_markup=step_keyboard()
-        )
+        await update.message.reply_text(T(lang, "ns_season_ask"), reply_markup=step_keyboard())
         return
 
     if step == 4:
         context.user_data["ns_season"] = text
         context.user_data[NS_STEP_KEY] = 5
-        await update.message.reply_text(
-            T(lang, "ns_competition_ask"),
-            reply_markup=step_keyboard()
-        )
+        await update.message.reply_text(T(lang, "ns_competition_ask"), reply_markup=step_keyboard())
         return
 
     if step == 5:
         context.user_data["ns_comp"] = text
         context.user_data[NS_STEP_KEY] = 6
-        await update.message.reply_text(
-            T(lang, "ns_resources_ask"),
-            reply_markup=step_keyboard()
-        )
+        await update.message.reply_text(T(lang, "ns_resources_ask"), reply_markup=step_keyboard())
         return
 
     if step == 6:
@@ -511,18 +531,12 @@ async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{insights}\n"
         )
 
-        await update.message.reply_text(
-            insights,
-            reply_markup=main_menu_keyboard()
-        )
+        await update.message.reply_text(insights, reply_markup=main_menu_keyboard())
 
         try:
             await update.message.chat.send_action("typing")
             ai_text = await ask_openai(ai_prompt)
-            await update.message.reply_text(
-                ai_text,
-                reply_markup=main_menu_keyboard()
-            )
+            await update.message.reply_text(ai_text, reply_markup=main_menu_keyboard())
         except Exception:
             await update.message.reply_text(
                 "⚠️ Не удалось получить AI-комментарий.",
@@ -531,15 +545,14 @@ async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         save_insights(context, insights)
         clear_fsm(context)
-        await update.message.reply_text(
-            T(lang, "choose_section"),
-            reply_markup=main_menu_keyboard()
-        )
+        await update.message.reply_text(T(lang, "choose_section"), reply_markup=main_menu_keyboard())
         return
+
 
 # =============================
 # ⭐ PREMIUM
 # =============================
+
 
 async def premium_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data.get("lang", "ru")
@@ -547,6 +560,7 @@ async def premium_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         T(lang, "premium_intro"),
         reply_markup=premium_keyboard(),
     )
+
 
 async def premium_benefits(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -569,230 +583,249 @@ async def premium_benefits(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=premium_keyboard(),
     )
 
+
 # =============================
-# AI CHAT (PREMIUM)
+# 🧭 AI-НАСТАВНИК — ОДНОРАЗОВО (НЕ РЕЖИМ)
 # =============================
 
-async def ai_chat_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = _safe_text(update)
-    if not text:
+
+async def ai_mentor_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    clear_fsm(context)
+    context.user_data[AI_MENTOR_PENDING_KEY] = True
+
+    try:
+        premium = is_user_premium(update.effective_user.id)
+    except Exception:
+        premium = False
+
+    if premium:
+        msg = (
+            "🧭 AI-наставник\n\n"
+            "Напиши один вопрос одним сообщением.\n\n"
+            "После ответа я верну тебя в меню."
+        )
+    else:
+        msg = (
+            "🧭 AI-наставник\n\n"
+            "Напиши один вопрос одним сообщением.\n\n"
+            "В бесплатной версии ответ будет коротким."
+        )
+
+    await update.message.reply_text(
+        msg,
+        reply_markup=ReplyKeyboardMarkup([[KeyboardButton(BTN_BACK)]], resize_keyboard=True),
+    )
+
+
+async def ai_mentor_handle_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop(AI_MENTOR_PENDING_KEY, None)
+
+    user_text = _safe_text(update)
+    if not user_text or user_text.startswith("/"):
         return
+
+    user_id = update.effective_user.id
+    try:
+        premium = is_user_premium(user_id)
+    except Exception:
+        premium = False
+
+    if not premium:
+        prompt = (
+            "Ты — AI-наставник предпринимателя.\n"
+            "Ответь КОРОТКО, максимум 5–7 предложений.\n"
+            "Структура: 1) Суть 2) Риск 3) Что проверить.\n"
+            "Запрещено: советы, обещания, прогнозы, директивы.\n"
+            "В конце одной строкой мягкий upsell в Premium (без давления).\n\n"
+            f"Вопрос пользователя:\n{user_text}"
+        )
+    else:
+        prompt = (
+            "Ты — AI-наставник предпринимателя.\n"
+            "Дай расширенный аналитический ответ.\n"
+            "Структура строго: 1) Суть 2) Риски 3) Что проверить.\n"
+            "Запрещено: советы, обещания, прогнозы, директивы.\n"
+            "Пиши ясно и по делу.\n\n"
+            f"Вопрос пользователя:\n{user_text}"
+        )
+
     try:
         await update.message.chat.send_action("typing")
-        ai_text = await ask_openai(text)
-        await update.message.reply_text(ai_text, reply_markup=ai_chat_keyboard())
+        answer = await ask_openai(prompt)
+        await update.message.reply_text(answer, reply_markup=main_menu_keyboard())
     except Exception:
-        await update.message.reply_text("⚠️ Не удалось получить AI-ответ.", reply_markup=ai_chat_keyboard())
+        await update.message.reply_text(
+            "⚠️ Сейчас не удалось получить ответ. Попробуй чуть позже.",
+            reply_markup=main_menu_keyboard(),
+        )
 
-# =============================
-# КНОПКИ ГЛАВНОГО МЕНЮ
-# =============================
-
-async def on_ai_chat_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data[AI_CHAT_MODE_KEY] = True
+    clear_fsm(context)
     lang = context.user_data.get("lang", "ru")
-    await update.message.reply_text(
-        T(lang, "ai_chat_start"),
-        reply_markup=ai_chat_keyboard()
-    )
+    await update.message.reply_text(T(lang, "choose_section"), reply_markup=main_menu_keyboard())
 
-async def on_ai_chat_exit(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.pop(AI_CHAT_MODE_KEY, None)
-    lang = context.user_data.get("lang", "ru")
-    await update.message.reply_text(
-        T(lang, "ai_chat_exit"),
-        reply_markup=main_menu_keyboard()
-    )
-
-async def on_profile_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    return await on_profile(update, context)
-
-async def on_documents_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    return await on_documents(update, context)
-
-async def on_export_pdf_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    return await on_export_pdf(update, context)
-
-async def on_export_excel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    return await on_export_excel(update, context)
-
-# =============================
-# НОВАЯ ФИЧА: ЭТАП КОМПАНИИ
-# =============================
-
-async def on_company_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    return await start_company_stage(update, context)
 
 # =============================
 # ROUTER (ЕДИНЫЙ) — TEXT
 # =============================
 
-async def user_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update or not update.message:
+
+async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_user_context(update):
         return
-    
+
     text = _safe_text(update)
-    lang = context.user_data.get("lang", "ru")
-    user_id = update.effective_user.id
-    
-    # Проверка роли (только user)
-    role = await get_user_role(user_id)
-    if role != "user":
+    if not text or text.startswith("/"):
         return
-    
-    # 1. ОНБОРДИНГ (первым!)
+
+    lang = context.user_data.get("lang", "ru")
+
+    try:
+        role = get_user_role(update.effective_user.id)
+    except Exception:
+        logger.exception("get_user_role failed in user.text_router")
+        return
+
+    # 1) Проверка роли (owner / manager -> return)
+    if role in ("owner", "manager"):
+        return
+
+    # 2) Онбординг (ONBOARDING_KEY)
     if context.user_data.get(ONBOARDING_KEY):
         if text == BTN_YES:
             await on_yes(update, context)
             return
-        elif text == BTN_NO:
+        if text == BTN_NO:
             await on_no(update, context)
             return
-        else:
-            await update.message.reply_text(
-                "Пожалуйста, выбери 'Да' или 'Нет'",
-                reply_markup=ReplyKeyboardMarkup(
-                    [[KeyboardButton(BTN_YES), KeyboardButton(BTN_NO)]],
-                    resize_keyboard=True,
-                )
-            )
+        return
+
+    # 3) AI-наставник (одноразово)
+    if context.user_data.get(AI_MENTOR_PENDING_KEY):
+        if text == BTN_BACK:
+            context.user_data.pop(AI_MENTOR_PENDING_KEY, None)
+            clear_fsm(context)
+            await update.message.reply_text(T(lang, "choose_section"), reply_markup=main_menu_keyboard())
             return
-    
-    # 2. AI-ЧАТ РЕЖИМ
-    if context.user_data.get(AI_CHAT_MODE_KEY):
-        if text == BTN_EXIT_CHAT:
-            await on_ai_chat_exit(update, context)
+        await ai_mentor_handle_question(update, context)
+        return
+
+    # 4) Глобальные кнопки меню + глобальный BACK
+    if text == BTN_BACK:
+        if context.user_data.get("in_business_submenu"):
+            context.user_data.pop("in_business_submenu", None)
+            clear_fsm(context)
+            await update.message.reply_text(T(lang, "choose_section"), reply_markup=main_menu_keyboard())
             return
-        else:
-            await ai_chat_text_handler(update, context)
+
+        if any(
+            [
+                context.user_data.get(PM_STATE_KEY),
+                context.user_data.get(GROWTH_KEY),
+                context.user_data.get(COMPANY_STAGE_STATE),
+            ]
+        ):
+            clear_fsm(context)
+            context.user_data["in_business_submenu"] = True
+            await update.message.reply_text("📊 Бизнес-анализ", reply_markup=business_hub_keyboard())
             return
-    
-    # 3. FSM СОСТОЯНИЯ (по приоритету)
-    if context.user_data.get(COMPANY_STAGE_STATE):
-        await handle_company_stage(update, context)
+
+        if any([context.user_data.get(TA_STATE_KEY), context.user_data.get(NS_STEP_KEY)]):
+            clear_fsm(context)
+            await update.message.reply_text(T(lang, "choose_section"), reply_markup=main_menu_keyboard())
+            return
+
+        clear_fsm(context)
+        await update.message.reply_text(T(lang, "choose_section"), reply_markup=main_menu_keyboard())
         return
-    
-    if context.user_data.get(PM_STATE_KEY):
-        await pm_handler(update, context)
+
+    if text == BTN_BIZ:
+        await on_business_analysis(update, context)
         return
-    
-    if context.user_data.get(GROWTH_KEY):
-        await growth_handler(update, context)
+
+    if text == BTN_ANALYSIS:
+        clear_fsm(context)
+        await ta_start(update, context)
         return
-    
-    if context.user_data.get(TA_STATE_KEY):
-        await ta_handler(update, context)
+
+    if text == BTN_NICHE:
+        clear_fsm(context)
+        await ns_start(update, context)
         return
-    
-    if context.user_data.get(NS_STEP_KEY):
-        await ns_handler(update, context)
+
+    if text == BTN_PROFILE:
+        await on_profile(update, context)
         return
-    
-    # 4. ПОДМЕНЮ БИЗНЕС-АНАЛИЗ
+
+    if text == BTN_PREMIUM:
+        await premium_start(update, context)
+        return
+
+    if text == BTN_PREMIUM_BENEFITS:
+        await premium_benefits(update, context)
+        return
+
+    if text == BTN_DOCS:
+        await on_documents(update, context)
+        return
+
+    if text == BTN_AI_CHAT:
+        await ai_mentor_entry(update, context)
+        return
+
+    # 5) Бизнес-хаб
     if context.user_data.get("in_business_submenu"):
         if text == BTN_PM:
             await pm_start(update, context)
             return
-        elif text == BTN_GROWTH:
+        if text == BTN_GROWTH:
             await growth_start(update, context)
             return
-        elif text == BTN_COMPANY_STAGE:
-            await on_company_stage(update, context)
+        if text == BTN_COMPANY_STAGE:
+            await start_company_stage(update, context)
             return
-        elif text == BTN_BACK:
-            context.user_data.pop("in_business_submenu", None)
-            await update.message.reply_text(
-                T(lang, "choose_section"),
-                reply_markup=main_menu_keyboard()
-            )
-            return
-    
-    # 5. ОСНОВНЫЕ КНОПКИ ГЛАВНОГО МЕНЮ
-    if text == BTN_BIZ:
-        await on_business_analysis(update, context)
-        return
-    elif text == BTN_ANALYSIS:
-        await ta_start(update, context)
-        return
-    elif text == BTN_NICHE:
-        await ns_start(update, context)
-        return
-    elif text == BTN_AI_CHAT:
-        await on_ai_chat_start(update, context)
-        return
-    elif text == BTN_PREMIUM:
-        await premium_start(update, context)
-        return
-    elif text == BTN_PREMIUM_BENEFITS:
-        await premium_benefits(update, context)
-        return
-    elif text == BTN_PROFILE:
-        await on_profile_cmd(update, context)
-        return
-    elif text == BTN_DOCS:
-        await on_documents_cmd(update, context)
-        return
-    elif text == "📤 PDF" or text == "📊 Excel":
-        is_premium = await is_user_premium(user_id)
-        if not is_premium:
-            await update.message.reply_text(
-                "Экспорт доступен только для Premium пользователей.",
-                reply_markup=premium_keyboard()
-            )
-            return
-        if text == "📤 PDF":
-            await on_export_pdf_cmd(update, context)
-        else:
-            await on_export_excel_cmd(update, context)
-        return
-    
-    # 6. НЕИЗВЕСТНАЯ КОМАНДА
-    await update.message.reply_text(
-        T(lang, "unknown_command"),
-        reply_markup=main_menu_keyboard()
-    )
 
-# =============================
-# CALLBACK QUERY HANDLER
-# =============================
-
-async def user_callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    data = query.data
-    user_id = query.from_user.id
-    
-    # Проверка роли
-    role = await get_user_role(user_id)
-    if role != "user":
+    # 6) Экспорт
+    if text == "📊 Скачать Excel":
+        await on_export_excel(update, context)
         return
-    
-    if data == "export_pdf":
-        is_premium = await is_user_premium(user_id)
-        if not is_premium:
-            await query.edit_message_text(
-                "Экспорт в PDF доступен только для Premium пользователей.",
-                reply_markup=premium_keyboard()
-            )
-            return
-        await on_export_pdf(query, context)
-    
-    elif data == "export_excel":
-        is_premium = await is_user_premium(user_id)
-        if not is_premium:
-            await query.edit_message_text(
-                "Экспорт в Excel доступен только для Premium пользователей.",
-                reply_markup=premium_keyboard()
-            )
-            return
-        await on_export_excel(query, context)
-    
-    elif data == "company_stage_export":
+    if text == "📄 Скачать PDF":
+        await on_export_pdf(update, context)
+        return
+    if text == "📈 Экспорт этапа":
         await handle_company_stage_export(update, context)
-    
-    else:
-        await query.edit_message_text(
-            "Неизвестная команда",
-            reply_markup=main_menu_keyboard()
-        )
+        return
+
+    # 7) Активные FSM (pm / growth / ta / ns / company_stage)
+    if context.user_data.get(PM_STATE_KEY):
+        await pm_handler(update, context)
+        return
+    if context.user_data.get(GROWTH_KEY):
+        await growth_handler(update, context)
+        return
+    if context.user_data.get(COMPANY_STAGE_STATE):
+        await handle_company_stage(update, context)
+        return
+    if context.user_data.get(TA_STATE_KEY):
+        await ta_handler(update, context)
+        return
+    if context.user_data.get(NS_STEP_KEY):
+        await ns_handler(update, context)
+        return
+
+    # 8) Fallback -> главное меню
+    clear_fsm(context)
+    await update.message.reply_text(T(lang, "choose_section"), reply_markup=main_menu_keyboard())
+
+
+async def show_documents(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await on_documents(update, context)
+
+
+def register_handlers_user(app: Application):
+    """
+    Регистрирует пользовательский текстовый роутер.
+    """
+    app.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, text_router),
+        group=4,
+    )
