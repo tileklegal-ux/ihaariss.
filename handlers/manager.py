@@ -47,14 +47,14 @@ async def manager_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def manager_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    if not user:
+    if not user or not update.message:
         return
 
     user_id = user.id
     ensure_user_exists(user_id)
 
     role = get_user_role(user_id)
-    if role not in ("manager", "owner"):
+    if role != "manager":
         return
 
     text = (update.message.text or "").strip()
@@ -62,14 +62,11 @@ async def manager_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     # -------------------------
-    # EXIT
+    # EXIT → ВОЗВРАТ В ПАНЕЛЬ МЕНЕДЖЕРА
     # -------------------------
     if text == "⬅️ Выйти":
         context.user_data.pop(MANAGER_AWAIT_PREMIUM, None)
-        await update.message.reply_text(
-            "Выход из панели менеджера",
-            reply_markup=MANAGER_KEYBOARD,
-        )
+        await manager_start(update, context)
         return
 
     # -------------------------
