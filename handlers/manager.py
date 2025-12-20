@@ -51,12 +51,10 @@ async def manager_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     user_id = user.id
-
-    # 🔑 КРИТИЧЕСКИ ВАЖНО
     ensure_user_exists(user_id)
 
     role = get_user_role(user_id)
-    if role != "manager":
+    if role not in ("manager", "owner"):
         return
 
     text = (update.message.text or "").strip()
@@ -68,7 +66,10 @@ async def manager_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE
     # -------------------------
     if text == "⬅️ Выйти":
         context.user_data.pop(MANAGER_AWAIT_PREMIUM, None)
-        await update.message.reply_text("Выход из панели менеджера")
+        await update.message.reply_text(
+            "Выход из панели менеджера",
+            reply_markup=MANAGER_KEYBOARD,
+        )
         return
 
     # -------------------------
@@ -124,10 +125,9 @@ async def manager_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(
             "✅ Premium активирован\n\n"
             f"👤 Пользователь: {tg_id}\n"
-            f"⏳ Срок: {days} дней"
+            f"⏳ Срок: {days} дней",
+            reply_markup=MANAGER_KEYBOARD,
         )
-
-        await manager_start(update, context)
 
         try:
             await context.bot.send_message(
