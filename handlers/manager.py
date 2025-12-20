@@ -20,104 +20,102 @@ async def manager_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def manager_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    
-    # ТОЛЬКО если пользователь менеджер - обрабатываем
-    if get_user_role(user_id) == "manager":
-        text = (update.message.text or "").strip()
+    if get_user_role(user_id) != "manager":
+        return
 
-        # ─────────────────────────────
-        # START PREMIUM FLOW
-        # ─────────────────────────────
-        if text == "⭐ Активировать Premium":
-            context.user_data.clear()
-            context.user_data["await_premium"] = True
+    text = (update.message.text or "").strip()
 
+    # ─────────────────────────────
+    # START PREMIUM FLOW
+    # ─────────────────────────────
+    if text == "⭐ Активировать Premium":
+        context.user_data.clear()
+        context.user_data["await_premium"] = True
+
+        await update.message.reply_text(
+            "⭐ Активация Premium\n\n"
+            "Отправь сообщение в формате:\n"
+            "TELEGRAM_ID ДНИ\n\n"
+            "Примеры:\n"
+            "6444576072 30\n"
+            "6444576072 180\n"
+            "6444576072 365\n\n"
+            "Как узнать Telegram ID:\n"
+            "1️⃣ Напиши боту @userinfobot\n"
+            "2️⃣ Скопируй ID\n"
+            "3️⃣ Пришли сюда"
+        )
+        return  # НЕ УДАЛЯТЬ - это правильный return
+
+    if text == "⬅️ Выйти":
+        context.user_data.clear()
+        await update.message.reply_text("Выход из панели менеджера")
+        return
+
+    # ─────────────────────────────
+    # HANDLE PREMIUM ACTIVATION
+    # ─────────────────────────────
+    if context.user_data.get("await_premium"):
+        parts = text.split()
+
+        if len(parts) != 2:
             await update.message.reply_text(
-                "⭐ Активация Premium\n\n"
-                "Отправь сообщение в формате:\n"
-                "TELEGRAM_ID ДНИ\n\n"
-                "Примеры:\n"
-                "6444576072 30\n"
-                "6444576072 180\n"
-                "6444576072 365\n\n"
-                "Как узнать Telegram ID:\n"
-                "1️⃣ Напиши боту @userinfobot\n"
-                "2️⃣ Скопируй ID\n"
-                "3️⃣ Пришли сюда"
+                "❌ Неверный формат.\nИспользуй: TELEGRAM_ID ДНИ"
             )
             return
 
-        if text == "⬅️ Выйти":
-            context.user_data.clear()
-            await update.message.reply_text("Выход из панели менеджера")
-            return
+        tg_id, days = parts
 
-        # ─────────────────────────────
-        # HANDLE PREMIUM ACTIVATION
-        # ─────────────────────────────
-        if context.user_data.get("await_premium"):
-            parts = text.split()
-
-            if len(parts) != 2:
-                await update.message.reply_text(
-                    "❌ Неверный формат.\nИспользуй: TELEGRAM_ID ДНИ"
-                )
-                return
-
-            tg_id, days = parts
-
-            if not tg_id.isdigit() or not days.isdigit():
-                await update.message.reply_text(
-                    "❌ Telegram ID и срок должны быть числами."
-                )
-                return
-
-            tg_id = int(tg_id)
-            days = int(days)
-
-            if days <= 0:
-                await update.message.reply_text("❌ Срок должен быть больше 0.")
-                return
-
-            if days > 3650:  # Максимум 10 лет
-                await update.message.reply_text("❌ Максимальный срок: 3650 дней.")
-                return
-
-            ensure_user_exists(tg_id)
-
-            premium_until = datetime.now(timezone.utc) + timedelta(days=days)
-            set_premium_until(tg_id, premium_until)
-
-            context.user_data.clear()
-
+        if not tg_id.isdigit() or not days.isdigit():
             await update.message.reply_text(
-                f"✅ Premium активирован\n\n"
-                f"👤 Пользователь: {tg_id}\n"
-                f"⏳ Срок: {days} дней"
+                "❌ Telegram ID и срок должны быть числами."
             )
-
-            await manager_start(update, context)
-
-            try:
-                await context.bot.send_message(
-                    chat_id=tg_id,
-                    text=(
-                        "🎉 Поздравляем!\n\n"
-                        "Ваш Premium доступ активирован ✨\n\n"
-                        f"⏳ Срок действия: {days} дней\n\n"
-                        "Теперь вам доступны расширенные функции бота 🚀"
-                    ),
-                )
-            except Exception:
-                pass
-
             return
-    
-    # Если пользователь НЕ менеджер - НИЧЕГО не делаем
-    # Обработка переходит к user_text_router
+
+        tg_id = int(tg_id)
+        days = int(days)
+
+        if days <= 0:
+            await update.message.reply_text("❌ Срок должен быть больше 0.")
+            return
+
+        ensure_user_exists(tg_id)
+
+        # 🔑 ВАЖНО: datetime, а не timestamp
+        premium_until = datetime.now(timezone.utc) + timedelta(days=days)
+
+        set_premium_until(tg_id, premium_until)
+
+        context.user_data.clear()
+
+        # уведомление менеджеру
+        await update.message.reply_text(
+            f"✅ Premium активирован\n\n"
+            f"👤 Пользователь: {tg_id}\n"
+            f"⏳ Срок: {days} дней"
+        )
+
+        # ВОЗВРАТ В МЕНЮ МЕНЕДЖЕРА
+        await manager_start(update, context)
+
+        # уведомление пользователю
+        try:
+            await context.bot.send_message(
+                chat_id=tg_id,
+                text=(
+                    "🎉 Поздравляем!\n\n"
+                    "Ваш Premium доступ активирован ✨\n\n"
+                    f"⏳ Срок действия: {days} дней\n\n"
+                    "Теперь вам доступны расширенные функции бота 🚀"
+                ),
+            )
+        except Exception:
+            pass
+
+        return
 
 def register_manager_handlers(app):
     app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, manager_text_router),
+        MessageHandler(filters.TEXT & ~filters.COMMAND, manager_text_router, block=False),
         group=1,
     )
