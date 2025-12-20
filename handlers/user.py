@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import logging
-from datetime import datetime, timezone
-
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ContextTypes, MessageHandler, filters
 
@@ -28,18 +26,19 @@ from handlers.user_keyboards import (
     BTN_PREMIUM_BENEFITS,
     BTN_BIZ,
     BTN_DOCS,
+    BTN_COMPANY_STAGE
 )
 
 from handlers.user_texts import t as T
-
-from handlers.user_helpers import (
-    clear_fsm,
-    save_insights,
-    insights_bridge_text,
-)
-
+from handlers.user_helpers import clear_fsm, save_insights
 from handlers.profile import on_profile, on_export_excel, on_export_pdf
 from handlers.documents import on_documents
+from handlers.company_stage import (
+    start_company_stage,
+    handle_company_stage,
+    handle_company_stage_export,
+    COMPANY_STAGE_STATE
+)
 
 from services.openai_client import ask_openai
 from database.db import is_user_premium, get_user_role
@@ -49,13 +48,10 @@ logger = logging.getLogger(__name__)
 # =============================
 # FSM KEYS
 # =============================
-
 PM_STATE_KEY = "pm_state"
 PM_STEP = "pm_step"
-
 GROWTH_KEY = "growth_state"
 GROWTH_STEP = "growth_step"
-
 TA_STATE_KEY = "ta_state"
 TA_STEP = "ta_step"
 TA_STAGE = "ta_stage"
@@ -64,22 +60,21 @@ TA_SEASON = "ta_season"
 TA_COMP = "ta_comp"
 TA_PRICE = "ta_price"
 TA_RESOURCE = "ta_resource"
-
 NS_STEP_KEY = "ns_step"
-
 ONBOARDING_KEY = "onboarding"
 AI_CHAT_MODE_KEY = "ai_chat_mode"
 
+# =============================
+# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+# =============================
 
 def _safe_text(update: Update) -> str:
     return (update.message.text or "").strip() if update and update.message else ""
-
 
 def _is_user_context(update: Update) -> bool:
     if not update or not update.effective_user:
         return False
     return True
-
 
 # =============================
 # START / ONBOARDING
@@ -106,7 +101,6 @@ async def cmd_start_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ),
     )
 
-
 async def on_yes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop(ONBOARDING_KEY, None)
     lang = context.user_data.get("lang", "ru")
@@ -115,7 +109,6 @@ async def on_yes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu_keyboard(),
     )
 
-
 async def on_no(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop(ONBOARDING_KEY, None)
     await update.message.reply_text(
@@ -123,9 +116,8 @@ async def on_no(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu_keyboard(),
     )
 
-
 # =============================
-# 📊 БИЗНЕС-АНАЛИЗ (ХАБ)
+# 📊 БИЗНЕС-АНАЛИЗ (ХАБ) - ТОЛЬКО ПОДМЕНЮ
 # =============================
 
 async def on_business_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -136,9 +128,8 @@ async def on_business_analysis(update: Update, context: ContextTypes.DEFAULT_TYP
         reply_markup=business_hub_keyboard(),
     )
 
-
 # =============================
-# 💰 ПРИБЫЛЬ И ДЕНЬГИ (FSM) - 5 ШАГОВ
+# 💰 ПРИБЫЛЬ И ДЕНЬГИ (FSM) - ТОЛЬКО В ПОДМЕНЮ
 # =============================
 
 async def pm_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -151,7 +142,6 @@ async def pm_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         T(lang, "pm_intro"),
         reply_markup=pm_step_keyboard(1),
     )
-
 
 async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = _safe_text(update)
@@ -249,9 +239,8 @@ async def pm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-
 # =============================
-# 🚀 РОСТ И ПРОДАЖИ (FSM) - 5 ШАГОВ
+# 🚀 РОСТ И ПРОДАЖИ (FSM) - ТОЛЬКО В ПОДМЕНЮ
 # =============================
 
 async def growth_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -264,7 +253,6 @@ async def growth_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         T(lang, "growth_intro"),
         reply_markup=growth_step_keyboard(1),
     )
-
 
 async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = _safe_text(update)
@@ -362,6 +350,12 @@ async def growth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+# =============================
+# 📈 ЭТАП КОМПАНИИ (НОВАЯ ФИЧА)
+# =============================
+
+async def company_stage_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await start_company_stage(update, context)
 
 # =============================
 # 📦 АНАЛИТИКА ТОВАРА (FSM)
@@ -377,7 +371,6 @@ async def ta_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         T(lang, "ta_intro"),
         reply_markup=step_keyboard()
     )
-
 
 async def ta_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data.get("lang", "ru")
@@ -485,7 +478,6 @@ async def ta_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-
 # =============================
 # 🔎 ПОДБОР НИШИ (FSM)
 # =============================
@@ -499,7 +491,6 @@ async def ns_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         T(lang, "ns_intro"),
         reply_markup=step_keyboard()
     )
-
 
 async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data.get("lang", "ru")
@@ -606,7 +597,6 @@ async def ns_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-
 # =============================
 # ⭐ PREMIUM
 # =============================
@@ -618,14 +608,14 @@ async def premium_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=premium_keyboard(),
     )
 
-
 async def premium_benefits(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         (
             "📌 Что ты получишь в Premium:\n\n"
             "1️⃣ Более глубокий анализ ниши и рисков\n"
             "2️⃣ История и логика выводов\n"
-            "3️⃣ Возможность экспорта (PDF / Excel)\n\n"
+            "3️⃣ Возможность экспорта (PDF / Excel)\n"
+            "4️⃣ Полный анализ этапа компании (10 вопросов)\n\n"
             "⚠️ Это ориентир, а не инвестиционная рекомендация.\n"
             "Решение всегда остаётся за тобой.\n\n"
             "━━━━━━━━━━━━━━━━━━\n\n"
@@ -638,7 +628,6 @@ async def premium_benefits(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ),
         reply_markup=premium_keyboard(),
     )
-
 
 # ===============================
 # 🧭 AI-НАСТАВНИК (режим чата)
@@ -661,14 +650,12 @@ async def ai_mentor_intro(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=ai_chat_keyboard(),
     )
 
-
 async def ai_mentor_exit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop(AI_CHAT_MODE_KEY, None)
     await update.message.reply_text(
         T(context.user_data.get("lang", "ru"), "choose_section"),
         reply_markup=main_menu_keyboard(),
     )
-
 
 async def ai_mentor_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = _safe_text(update)
@@ -714,9 +701,8 @@ async def ai_mentor_text_handler(update: Update, context: ContextTypes.DEFAULT_T
             reply_markup=ai_chat_keyboard(),
         )
 
-
 # =============================
-# ROUTER
+# ROUTER - ИСПРАВЛЕННЫЙ (УБРАН BTN_PM и BTN_GROWTH)
 # =============================
 
 async def user_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -724,7 +710,6 @@ async def user_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     user_id = update.effective_user.id
-
     text = _safe_text(update)
     if not text:
         return
@@ -737,7 +722,7 @@ async def user_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text == BTN_NO:
             await on_no(update, context)
             return
-        return  # ⬅️ КРИТИЧЕСКИ ВАЖНО
+        return
 
     # 2. AI-CHAT
     if context.user_data.get(AI_CHAT_MODE_KEY):
@@ -750,22 +735,66 @@ async def user_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 3. РОЛЬ (менеджер / юзер)
     role = get_user_role(update.effective_user.id)
     if role == "manager":
-        await manager_router(update, context)
         return
 
-    # 4. МЕНЮ ЮЗЕРА
+    # 4. МЕНЮ ЮЗЕРА - ИСПРАВЛЕНО: УБРАНЫ BTN_PM и BTN_GROWTH
     if text == BTN_BIZ:
         await on_business_analysis(update, context)
         return
 
-    if text == BTN_PM:
-        await pm_start(update, context)
+    # 5. ПОДМЕНЮ БИЗНЕС-АНАЛИЗА (только здесь обрабатываются)
+    if context.user_data.get("in_business_submenu"):
+        if text == BTN_PM:
+            await pm_start(update, context)
+            return
+        if text == BTN_GROWTH:
+            await growth_start(update, context)
+            return
+        if text == BTN_COMPANY_STAGE:
+            await company_stage_start(update, context)
+            return
+        if text == BTN_BACK:
+            context.user_data.pop("in_business_submenu", None)
+            await update.message.reply_text(
+                T(context.user_data.get("lang", "ru"), "choose_section"),
+                reply_markup=main_menu_keyboard(),
+            )
+            return
+
+    # 6. FSM HANDLERS
+    if context.user_data.get(PM_STATE_KEY):
+        await pm_handler(update, context)
         return
 
-    if text == BTN_GROWTH:
-        await growth_start(update, context)
+    if context.user_data.get(GROWTH_KEY):
+        await growth_handler(update, context)
         return
 
+    if context.user_data.get(COMPANY_STAGE_STATE):
+        await handle_company_stage(update, context)
+        return
+
+    if text == "📊 Скачать Excel":
+        await on_export_excel(update, context)
+        return
+
+    if text == "📄 Скачать PDF":
+        await on_export_pdf(update, context)
+        return
+
+    if text == "📈 Экспорт этапа":
+        await handle_company_stage_export(update, context)
+        return
+
+    if context.user_data.get(TA_STATE_KEY):
+        await ta_handler(update, context)
+        return
+
+    if context.user_data.get(NS_STEP_KEY):
+        await ns_handler(update, context)
+        return
+
+    # 7. ОСНОВНЫЕ КНОПКИ
     if text == BTN_ANALYSIS:
         await ta_start(update, context)
         return
@@ -777,14 +806,6 @@ async def user_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == BTN_PROFILE:
         clear_fsm(context)
         await on_profile(update, context)
-        return
-
-    if text == "📊 Скачать Excel":
-        await on_export_excel(update, context)
-        return
-
-    if text == "📄 Скачать PDF":
-        await on_export_pdf(update, context)
         return
 
     if text == BTN_DOCS:
@@ -806,30 +827,12 @@ async def user_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await ai_mentor_intro(update, context)
         return
 
-    # FSM handlers
-    if context.user_data.get(PM_STATE_KEY):
-        await pm_handler(update, context)
-        return
-
-    if context.user_data.get(GROWTH_KEY):
-        await growth_handler(update, context)
-        return
-
-    if context.user_data.get(TA_STATE_KEY):
-        await ta_handler(update, context)
-        return
-
-    if context.user_data.get(NS_STEP_KEY):
-        await ns_handler(update, context)
-        return
-
-    # По умолчанию возвращаем в меню
+    # 8. По умолчанию возвращаем в меню
     lang = context.user_data.get("lang", "ru")
     await update.message.reply_text(
         T(lang, "choose_section"),
         reply_markup=main_menu_keyboard(),
     )
-
 
 def register_handlers_user(app):
     app.add_handler(
