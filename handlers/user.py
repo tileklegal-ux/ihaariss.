@@ -834,5 +834,5 @@ def register_handlers_user(app: Application):
         text_router,
         
     ),
-    group=4,
+    group=0,
     )
