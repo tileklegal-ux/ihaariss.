@@ -685,8 +685,11 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.exception("get_user_role failed in user.text_router")
         return
 
-    # 1) Проверка роли (owner / manager -> return)
-    if role in ("owner", "maneger"):
+    # 1) ПРОВЕРКА РОЛИ
+    # user.py — ТОЛЬКО для обычных пользователей.
+    # owner и manager имеют СВОИ интерфейсы и СВОИ роутеры.
+    # Если роль не "user" — этот роутер НИЧЕГО не обрабатывает.
+    if role != "user":
         return
 
     # 2) Онбординг (ONBOARDING_KEY)
@@ -697,7 +700,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text == BTN_NO:
             await on_no(update, context)
             return
-        return ApplicationHandlerStop
+        return 
 
     # 3) AI-наставник (одноразово)
     if context.user_data.get(AI_MENTOR_PENDING_KEY):
