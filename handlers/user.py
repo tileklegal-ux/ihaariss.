@@ -832,7 +832,7 @@ def register_handlers_user(app: Application):
     MessageHandler(
         filters.TEXT & ~filters.COMMAND,
         text_router,
-        block=False,  # 🔑 ОБЯЗАТЕЛЬНО
+        
     ),
     group=4,
     )
