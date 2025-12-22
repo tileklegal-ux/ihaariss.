@@ -68,7 +68,7 @@ ONBOARDING_KEY = "onboarding"
 
 # Канон: AI-наставник — НЕ режим. Разрешено только одноразовое ожидание 1 вопроса.
 AI_MENTOR_PENDING_KEY = "ai_mentor_pending"
-
+AI_DIALOG_ACTIVE_KEY = "ai_dialog_active"
 # =============================
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 # =============================
@@ -591,25 +591,15 @@ async def premium_benefits(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def ai_mentor_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_fsm(context)
-    context.user_data[AI_MENTOR_PENDING_KEY] = True
 
-    try:
-        premium = is_user_premium(update.effective_user.id)
-    except Exception:
-        premium = False
+    context.user_data[AI_DIALOG_ACTIVE_KEY] = True
 
-    if premium:
-        msg = (
-            "🧭 AI-наставник\n\n"
-            "Опиши ситуацию, которая сейчас для тебя важнее всего.\n\n"
-    "Начнём с неё."
-        )
-    else:
-        msg = (
-            "🧭 AI-наставник\n\n"
-            "Опиши ситуацию, которая сейчас для тебя важнее всего.\n\n"
-    "Начнём с неё."
-        )
+    await update.message.reply_text(
+        "🧭 AI-наставник\n\n"
+        "Я здесь, чтобы разобраться в твоей ситуации глубоко.\n"
+        "Опиши контекст, задай вопрос или просто начни с того, что сейчас волнует.\n\n"
+        "Диалог продолжится, пока ты сам не решишь выйти.",
+    )
 
     await update.message.reply_text(
         msg,
@@ -624,15 +614,7 @@ async def ai_mentor_handle_question(update: Update, context: ContextTypes.DEFAUL
     if not user_text or user_text.startswith("/"):
         return
 
-    # ===== HUMAN INTENT LAYER =====
-    intent = detect_intent(user_text)
-
-    if intent == MessageIntent.SOCIAL:
-        await update.message.reply_text(
-            get_social_reply()
-        )
-        return
-    # =============================
+    
 
     user_id = update.effective_user.id
     try:
@@ -737,16 +719,19 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await on_no(update, context)
             return
         return 
-
     # 3) AI-наставник (одноразово)
-    if context.user_data.get(AI_MENTOR_PENDING_KEY):
-        if text == BTN_BACK:
-            context.user_data.pop(AI_MENTOR_PENDING_KEY, None)
-            clear_fsm(context)
-            await update.message.reply_text(T(lang, "choose_section"), reply_markup=main_menu_keyboard())
-            return
-        await ai_mentor_handle_question(update, context)
+if context.user_data.get(AI_MENTOR_PENDING):
+    if text == BTN_BACK:
+        context.user_data.pop(AI_MENTOR_PENDING, None)
+        clear_fsm(context)
+        await update.message.reply_text(
+            "Окей, вернулись в меню 👇",
+            reply_markup=main_menu_keyboard()
+        )
         return
+
+    await ai_mentor_handle_question(update, context)
+    return
 
     # 4) Глобальные кнопки меню + глобальный BACK
     if text == BTN_BACK:
