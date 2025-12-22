@@ -694,6 +694,19 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = _safe_text(update)
     if not text or text.startswith("/"):
         return 
+     # === AI-наставник: активная сессия ===
+if context.user_data.get(AI_MENTOR_PENDING_KEY):
+    if text == BTN_BACK:
+        context.user_data.pop(AI_MENTOR_PENDING, None)
+        clear_fsm(context)
+        await update.message.reply_text(
+            "Окей, вернулись в меню 👇",
+            reply_markup=main_menu_keyboard()
+        )
+        return
+
+    await ai_mentor_handle_question(update, context)
+    return   
 
     lang = context.user_data.get("lang", "ru")
 
@@ -719,16 +732,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await on_no(update, context)
             return
         return 
-    # 3) AI-наставник (одноразовый режим)
-    if context.user_data.get(AI_MENTOR_PENDING_KEY):
-        if text == BTN_BACK:
-            context.user_data.pop(AI_MENTOR_PENDING, None)
-            clear_fsm(context)
-            await update.message.reply_text(
-                "Окей, вернулись в меню 👇",
-                reply_markup=main_menu_keyboard()
-            )
-            return
+
 
         await ai_mentor_handle_question(update, context)
         return
